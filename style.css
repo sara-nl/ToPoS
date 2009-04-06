@@ -1,0 +1,35 @@
+@CHARSET "UTF-8";
+
+/* Table of contents */
+table.toc, table.progress {
+  border-collapse: collapse;
+  empty-cells: show;
+}
+table.toc td,
+table.toc th {
+	border: 1px solid #ccc;
+}
+table.toc th {
+	border-top: 0;
+}
+table.toc tr.collection td {
+  /*font-weight: bold;*/
+}
+table.toc .name, table.toc .description { text-align: left; }
+table.toc .size { text-align: right; }
+
+/* Progress bar stuff */
+table.progress {
+	border: 1px solid black;
+}
+table.progress td {
+	border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  font-weight: bold;
+}
+table.progress td.done {
+  background-color: navy;
+  color: white;
+}
