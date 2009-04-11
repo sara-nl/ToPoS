@@ -17,7 +17,7 @@ RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/tokens$ /3/realms/$1/pools/$2/to
 
 # Script redirects:
 RewriteRule ^newRealm/?$ /3/newRealm.php [L]
-RewriteRule ^realms/$ /3/realmss.php [L]
+RewriteRule ^realms/$ /3/realms.php [L]
 RewriteRule ^realms/([\w\-.]+)/$ /3/realm.php/$1 [L]
 RewriteRule ^realms/([\w\-.]+)/nextToken$ /3/nextToken.php/$1 [L]
 RewriteRule ^realms/([\w\-.]+)/locks/$ /3/locks.php/$1 [L]
