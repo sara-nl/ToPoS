@@ -113,5 +113,3 @@ Topos::start_html('Lock info');
 <tr><th>Timeout:</th><td id="timeout"><?php echo htmlentities($row[2]); ?></td></tr>
 </tbody></table><?php
 Topos::end_html();
-
-?>

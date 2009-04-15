@@ -87,5 +87,3 @@ if ($row[3]) {
 REST::header($headers);
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
 echo $row[0];
-
-?>

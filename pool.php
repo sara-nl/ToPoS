@@ -193,13 +193,9 @@ if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   Topos::fatal('NOT_MODIFIED');
 
-REST::header(array(
-  'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8',
-  'Last-Modified' => REST::http_date(0),
-));
-if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-Topos::start_html('Pool');
-?><h1>Forms</h1>
+$t_pool = htmlentities($TOPOS_POOL);
+$directory = ToposDirectory::factory(<<<EOS
+<h1>Forms</h1>
 <h2>Delete</h2>
 <form action="./?http_method=DELETE" method="post">
 <input type="submit" value="Delete this pool"/>
@@ -207,7 +203,7 @@ Topos::start_html('Pool');
 <h2>Populate this pool</h2>
 <form action="./" method="post">
 # tokens: <input type="text" name="tokens"/>
-<input type="hidden" name="pool" value="<?php echo htmlentities($TOPOS_POOL); ?>"/>
+<input type="hidden" name="pool" value="{$t_pool}"/>
 <input type="submit" value="Populate"/>
 </form>
 <h2>Create and delete tokens in one atomic transaction</h2>
@@ -228,21 +224,9 @@ Topos::start_html('Pool');
 <input type="text" name="timeout"/> Timeout in seconds (leave empty for shared tokens)<br/>
 <input type="submit" value="Get next token"/>
 </form>
-<h1>Directory index</h1><?php
-Topos::directory_list(array(
-  array(
-    'name' => 'tokens/',
-    'desc' => 'Tokens directory',
-  ),
-  array(
-    'name' => 'nextToken',
-    'desc' => 'Redirects to the next available token',
-  ),
-  array(
-    'name' => 'progress',
-    'desc' => 'Jan Bot\'s progress bar',
-  )
-));
-Topos::end_html();
-
-?>
+EOS
+);
+$directory->line('tokens/');
+$directory->line('nextToken');
+$directory->line('progress', '', 'a progress bar');
+$directory->end();

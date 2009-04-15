@@ -17,7 +17,7 @@
  * $Id$
  **************************************************************************/
 
-require_once( 'include/directory.php' );
+require_once( 'include/global.php' );
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
   Topos::fatal('METHOD_NOT_ALLOWED');

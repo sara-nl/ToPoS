@@ -85,13 +85,8 @@ if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   Topos::fatal('NOT_MODIFIED');
 
-REST::header(array(
-  'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8',
-  'Last-Modified' => REST::http_date(0),
-));
-if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-Topos::start_html('Realm');
-?><h1>Forms</h1>
+
+$directory = ToposDirectory::factory(<<<EOS
 <h2>Delete</h2>
 <form action="./?http_method=DELETE" method="post">
 <input type="submit" value="Delete this realm"/>
@@ -109,21 +104,9 @@ Topos::start_html('Realm');
 <input type="text" name="timeout"/> Timeout in seconds (leave empty for shared tokens)<br/>
 <input type="submit" value="Get next token"/>
 </form>
-<h1>Directory index</h1><?php
-Topos::directory_list(array(
-  array(
-    'name' => 'locks/',
-    'desc' => 'A locks directory',
-  ),
-  array(
-    'name' => 'pools/',
-    'desc' => 'A pools directory',
-  ),
-  array(
-    'name' => 'nextToken',
-    'desc' => 'GET or PUT the next token',
-  )
-));
-Topos::end_html();
-
-?>
+EOS
+);
+$directory->line('locks/');
+$directory->line('pools/');
+$directory->line('nextToken', '', 'GET or PUT the next token');
+$directory->end();

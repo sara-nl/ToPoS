@@ -49,5 +49,3 @@ REST::header( array(
 Topos::start_html('New realm redirect');
 echo "<p><a href=\"$url\">$url</a></p>";
 Topos::end_html();
-
-?>

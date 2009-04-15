@@ -78,5 +78,3 @@ Topos::start_html('Pool');
 </tr>
 </tbody></table><?php
 Topos::end_html();
-
-?>
