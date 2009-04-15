@@ -18,7 +18,6 @@
  **************************************************************************/
 
 require_once('include/global.php');
-require_once('include/directory.php');
 
 $escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool  = Topos::escape_string($TOPOS_POOL);
