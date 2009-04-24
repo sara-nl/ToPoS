@@ -19,7 +19,6 @@
 
 require_once('include/global.php');
 
-
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
      strpos( @$_SERVER['CONTENT_TYPE'], 'application/x-www-form-urlencoded' ) === 0 ) {
   $_POST['pool'] = $TOPOS_POOL;
