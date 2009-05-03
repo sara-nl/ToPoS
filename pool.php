@@ -65,12 +65,12 @@ EOS
       $poolId = Topos::poolId($TOPOS_REALM, $TOPOS_POOL);
       $stmt = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `Tokens` (
-  `poolId`, `tokenValue`, `tokenType`, `tokenCreated`
-) VALUES ({$poolId}, ?, ?, UNIX_TIMESTAMP());
+  `poolId`, `tokenValue`, `tokenType`, `tokenLength`, `tokenCreated`
+) VALUES ({$poolId}, ?, ?, ?, UNIX_TIMESTAMP());
 EOS
       );
-      $bindTokenValue = $bindTokenType = null;
-      $stmt->bind_param("bs", $bindTokenValue, $bindTokenType);
+      $bindTokenValue = $bindTokenType = $bindTokenLength = null;
+      $stmt->bind_param("bsi", $bindTokenValue, $bindTokenType, $bindTokenLength);
       foreach ($_FILES as $paramname => $file) {
         if (!is_array( $file['error'] ) ) {
           $file['name'    ] = array( $file['name'    ] );
@@ -90,6 +90,7 @@ EOS
           $bindTokenType = @$file['type'][$key];
           if (empty($bindTokenType))
             $bindTokenType = 'application/octet-stream';
+          $bindTokenLength = $file['size'][$key];
           $stream = fopen( $file['tmp_name'][$key], 'r' );
           while ( !feof($stream) )
             $stmt->send_long_data( 0, fread( $stream, 8192 ) );

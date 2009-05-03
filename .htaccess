@@ -1,3 +1,5 @@
+#RedirectMatch .* https://topos.grid.sara.nl/error/HTTP_SERVICE_UNAVAILABLE.html.var
+#Deny from All
 SetOutputFilter DEFLATE
 
 AddType application/x-x509-ca-cert pem

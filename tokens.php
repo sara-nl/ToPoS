@@ -27,7 +27,7 @@ if ( !in_array( $_SERVER['REQUEST_METHOD'],
   Topos::fatal('METHOD_NOT_ALLOWED');
 
 $result = Topos::query(<<<EOS
-SELECT `tokenId`, LENGTH(`tokenValue`)
+SELECT `tokenId`, `tokenLength`
 FROM `Pools` NATURAL JOIN `Tokens`
 WHERE `realmName` = {$escRealm}
   AND `poolName`  = {$escPool}

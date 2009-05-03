@@ -85,44 +85,6 @@ public static function sortable_date($timestamp) {
 }
   
   
-public static function directory_list_start() {
-?><table class="toc" id="directory_index"><tbody>
-<tr><th class="name">Name</th>
-<th class="description">Description</th>
-<th class="size">Size</th></tr>
-<?php
-}
-
-
-public static function directory_list_line($entry) {
-  $name = $entry['name'];
-  $is_dir = substr($name, -1) === '/';
-  //if ($is_dir) $name = substr($name, 0, -1);
-  echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) .
-       '"><td class="name"><a rel="child" href="' . REST::urlencode($name) .
-       '">' . htmlentities($name) . '</a></td><td class="description">' .
-       (empty($entry['desc']) ? '' : $entry['desc']) . '</td><td class="size">' .
-       (empty($entry['size']) ? '' : $entry['size']) . "</td></tr>\n";
-}
-
-
-public static function directory_list_end() {
-  echo '</tbody></table>';
-}
-
-
-/**
- * @param $contents array
- * @return unknown_type
- */
-public static function directory_list($contents) {
-  self::directory_list_start();
-  foreach($contents as $entry)
-    self::directory_list_line($entry);
-  self::directory_list_end();
-}
-
-
 /**
  * @var mysqli
  */
@@ -275,14 +237,14 @@ private static $transactionId = NULL;
  */
 public static function transactionId() {
   if (is_null(self::$transactionId)) {
-  	$url = self::escape_string($_SERVER['REQUEST_URI']);
-    self::real_query(<<<EOS
+    $url = self::escape_string($_SERVER['REQUEST_URI']);
+    $query = <<<EOS
 INSERT INTO `Transactions` (`transactionAddress`, `transactionTimestamp`,
                             `transactionMethod`,  `transactionURL`)
 VALUES ('{$_SERVER['REMOTE_ADDR']}', UNIX_TIMESTAMP(),
         '{$_SERVER['REQUEST_METHOD']}', {$url});
-EOS
-    );
+EOS;
+    self::real_query($query);
     self::$transactionId = self::mysqli()->insert_id;
   }
   return self::$transactionId;
@@ -296,11 +258,11 @@ public static function log($action, $params) {
   $logEntry = join('&', $logEntry);
   $logEntry = self::escape_string("$action?$logEntry");
   $transactionId = self::transactionId();
-  self::real_query(<<<EOS
+  $query = <<<EOS
 INSERT INTO `Logs` (`transactionId`, `logEntry`)
 VALUES ( $transactionId, $logEntry );
-EOS
-  );
+EOS;
+  self::real_query($query);
 }
 
 
@@ -383,7 +345,7 @@ class ToposDirectory {
   /**
    * @param $name string
    */
-  public function line($name, $size, $description) {
+  public function line($name, $size = '', $description = '') {
     throw new Exception( 'Not implemented' );
   }
 
@@ -409,7 +371,7 @@ class ToposDirectoryPlain extends ToposDirectory {
    * @param $name string
    * @return string
    */
-  public function line($name, $size, $description) {
+  public function line($name, $size = '', $description = '') {
     echo "{$name}\t{$size}\n";
   }
 
@@ -439,7 +401,7 @@ class ToposDirectoryCSV extends ToposDirectory {
   /**
    * @param $name string
    */
-  public function line($name, $size, $description) {
+  public function line($name, $size = '', $description = '') {
     if (!$this->header_sent) {
       $this->start();
     }
@@ -487,7 +449,7 @@ EOS;
    * @param $name string
    * @return string
    */
-  public function line($name, $size, $description) {
+  public function line($name, $size = '', $description = '') {
     if (!$this->header_sent) {
       $this->start();
     }
@@ -534,7 +496,7 @@ class ToposDirectoryJSON extends ToposDirectory {
     );
   }
 
-  public function line($name, $size, $description) {
+  public function line($name, $size = '', $description = '') {
     if (empty($this->dir))
       $this->start();
     $this->dir['lines'][] = array($name, $size, $description);

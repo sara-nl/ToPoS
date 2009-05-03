@@ -61,7 +61,7 @@ EOS
     $tokenType = Topos::escape_string($tokenType);
     $stmt = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `Tokens`
-(`poolId`, `tokenValue`, `tokenType`, `tokenCreated`)
+       (`poolId`, `tokenValue`, `tokenType`, `tokenCreated`)
 VALUES (getPoolId({$escRealm}, {$escPool}), ?, {$tokenType}, UNIX_TIMESTAMP());
 EOS
     );
@@ -76,6 +76,7 @@ EOS
       Topos::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
     }
     $tokenId = Topos::mysqli()->insert_id;
+    Topos::real_query("UPDATE `Tokens` SET `tokenLength` = LENGTH(`tokenValue`) WHERE `tokenId` = $tokenId");
     Topos::log('create', array(
       'realmName' => $TOPOS_REALM,
       'poolName' => $TOPOS_POOL,
