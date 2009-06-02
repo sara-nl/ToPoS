@@ -37,18 +37,19 @@ EOS
     REST::header(array(
       'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
     ));
-    Topos::start_html('Lock destroyed');
-    echo '<p>Lock successfully destroyed.</p>';
-    Topos::end_html();
+    Topos::html_start('Lock destroyed');
+    echo REST::html_start('Lock destroyed') .
+      '<p>Lock successfully destroyed.</p>' .
+      REST::html_end();
     exit;
   } else {
-    Topos::fatal('NOT_FOUND');
+    REST::fatal('NOT_FOUND');
   }
 }
 
 if ( !in_array( $_SERVER['REQUEST_METHOD'],
                 array('HEAD', 'GET') ) )
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 
 if ( !empty($_GET['timeout']) &&
      ($timeout = (int)($_GET['timeout'])) > 0 ) {
@@ -60,7 +61,7 @@ WHERE `tokenLockUUID` = {$escLockUUID}
 EOS
   );
   if (!Topos::mysqli()->affected_rows)
-    Topos::fatal('NOT_FOUND');
+    REST::fatal('NOT_FOUND');
 }
 
 $result = Topos::query(<<<EOS
@@ -71,7 +72,7 @@ WHERE `tokenLockUUID` = $escLockUUID
 EOS
 );
 if (!($row = $result->fetch_row()))
-  Topos::fatal('NOT_FOUND');
+  REST::fatal('NOT_FOUND');
 $tokenURL = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
   '/pools/' . REST::urlencode($row[0]) . '/tokens/' . $row[1];
   
@@ -100,7 +101,7 @@ REST::header(array(
   'Cache-Control' => 'no-cache',
 ));
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-Topos::start_html('Lock info');
+echo REST::html_start('Lock info');
 ?><h1>Delete</h1>
 <form action="<?php echo $TOPOS_POOL; ?>?http_method=DELETE" method="post">
 <input type="submit" value="Delete this lock"/>
@@ -112,4 +113,4 @@ Topos::start_html('Lock info');
 <tr><th>TokenURL:</th><td id="tokenURL"><a href="<?php echo $tokenURL; ?>"><?php echo $tokenURL; ?></a></td></tr>
 <tr><th>Timeout:</th><td id="timeout"><?php echo htmlentities($row[2]); ?></td></tr>
 </tbody></table><?php
-Topos::end_html();
+echo REST::html_end();

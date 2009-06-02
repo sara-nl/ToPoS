@@ -33,3 +33,7 @@ table.progress td.done {
   background-color: navy;
   color: white;
 }
+
+#div_index {
+  float: right;
+}

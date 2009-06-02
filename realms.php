@@ -20,10 +20,10 @@
 require_once('include/global.php');
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 
 if (!preg_match('/^(?:145\\.100\\.(?:6|7|15)\\.|82\\.93\\.61\\.215)/', $_SERVER['REMOTE_ADDR']))
-  Topos::fatal(
+  REST::fatal(
     'FORBIDDEN',
     <<<EOS
 <p>Sorry, for security reasons you're not allowed to get a directory

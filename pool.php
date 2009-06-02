@@ -32,7 +32,7 @@ $escPool = Topos::escape_string($TOPOS_POOL);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Check if we have the right mime type:
   if ( strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) !== 0 )
-    Topos::fatal('UNSUPPORTED_MEDIA_TYPE');
+    REST::fatal('UNSUPPORTED_MEDIA_TYPE');
   // For this operation, we need MySQL transactions.
   Topos::real_query('START TRANSACTION;');
   try {
@@ -51,7 +51,7 @@ EOS
           );
           if (!Topos::mysqli()->affected_rows) {
             Topos::mysqli()->rollback();
-            Topos::fatal('NOT_FOUND', "Token $deleteTokenId not found");
+            REST::fatal('NOT_FOUND', "Token $deleteTokenId not found");
           }
           Topos::log('delete', array(
             'realmName' => $TOPOS_REALM,
@@ -83,7 +83,7 @@ EOS
           if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
             continue;
           if ( $file['error'][$key] !== UPLOAD_ERR_OK )
-            Topos::fatal(
+            REST::fatal(
               'BAD_REQUEST',
               htmlentities("Errno {$file['error'][$key]} occured during file upload.")
             );
@@ -97,7 +97,7 @@ EOS
           fclose($stream);
           if ( !$stmt->execute() ) {
             Topos::mysqli()->rollback();
-            Topos::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
+            REST::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
           }
           $t_upload_map[$stmt->insert_id] = empty($filename) ? $paramname : $filename;
           Topos::log('create', array(
@@ -114,7 +114,7 @@ EOS
     throw $e;
   }
   if (!Topos::mysqli()->commit())
-    Topos::fatal(
+    REST::fatal(
       'SERVICE_UNAVAILABLE',
       'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
     );
@@ -141,7 +141,7 @@ EOS
     exit;
   }
 
-  Topos::start_html('Pool');
+  echo REST::html_start('Pool');
   echo '<p>Tokens created/destroyed successfully.</p>' .
        '<p><a href="./" rel="index">Back to pool</a></p>';
   if (!empty($t_upload_map)) {
@@ -150,7 +150,7 @@ EOS
       echo '<li><a href="tokens/' . $tokenId . '">' . htmlentities($name) . "</a></li>\n";
     echo '</ul>';
   }
-  Topos::end_html();
+  echo REST::html_end();
   exit;
 }
 
@@ -175,24 +175,24 @@ EOS
     throw $e;
   }
   if (!Topos::mysqli()->commit())
-    Topos::fatal(
+    REST::fatal(
       'SERVICE_UNAVAILABLE',
       'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
     );
   REST::header(array(
     'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
   ));
-  Topos::start_html('Pool');
+  echo REST::html_start('Pool');
   echo '<p>Pool destroyed successfully.</p>';
-  Topos::end_html();
+  echo REST::html_end();
   exit;
 }
 
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  Topos::fatal('NOT_MODIFIED');
+  REST::fatal('NOT_MODIFIED');
 
 $t_pool = htmlentities($TOPOS_POOL);
 $directory = ToposDirectory::factory(<<<EOS

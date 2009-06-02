@@ -48,19 +48,19 @@ EOS
     REST::header(array(
       'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
     ));
-    Topos::start_html('Token destroyed');
+    echo REST::html_start('Token destroyed');
     echo '<p>Token destroyed successfully.</p>';
-    Topos::end_html();
+    echo REST::html_end();
     exit;
   } else {
-    Topos::fatal('NOT_FOUND');
+    REST::fatal('NOT_FOUND');
   }
 }
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  Topos::fatal('NOT_MODIFIED');
+  REST::fatal('NOT_MODIFIED');
 
 $result = Topos::query(<<<EOS
 SELECT `tokenValue`, `tokenType`, `tokenCreated`,
@@ -72,7 +72,7 @@ WHERE `realmName` = {$escRealm}
 EOS
 );
 if (!($row = $result->fetch_row()))
-  Topos::fatal('NOT_FOUND');
+  REST::fatal('NOT_FOUND');
 
 $headers = array(
   'Content-Type' => $row[1],

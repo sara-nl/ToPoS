@@ -25,7 +25,7 @@ $escRealm = Topos::escape_string($TOPOS_REALM);
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
   if (empty($TOPOS_POOL)) $TOPOS_POOL = $_GET['pool'];
   if (empty($TOPOS_POOL))
-    Topos::fatal(
+    REST::fatal(
       'BAD_REQUEST', 'Missing required pool name'
     );
   // For this operation, we need MySQL transactions.
@@ -46,7 +46,7 @@ EOS
           );
           if (!Topos::mysqli()->affected_rows) {
             Topos::mysqli()->rollback();
-            Topos::fatal('NOT_FOUND', "Token $deleteTokenId not found");
+            REST::fatal('NOT_FOUND', "Token $deleteTokenId not found");
           }
           Topos::log('delete', array(
             'realmName' => $TOPOS_REALM,
@@ -73,7 +73,7 @@ EOS
     fclose($stream);
     if ( !$stmt->execute() ) {
       Topos::mysqli()->rollback();
-      Topos::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
+      REST::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
     }
     $tokenId = Topos::mysqli()->insert_id;
     Topos::real_query("UPDATE `Tokens` SET `tokenLength` = LENGTH(`tokenValue`) WHERE `tokenId` = $tokenId");
@@ -88,7 +88,7 @@ EOS
     throw $e;
   }
   if (!Topos::mysqli()->commit())
-    Topos::fatal(
+    REST::fatal(
       'SERVICE_UNAVAILABLE',
       'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
     );
@@ -110,15 +110,15 @@ EOS
       echo $tokenURL;
       break;
     default:
-      Topos::start_html('New token created');
+      echo REST::html_start('New token created');
       echo "<p><a href=\"$tokenURL\">$tokenId</a></p>";
-      Topos::end_html();
+      echo REST::html_end();
   }
   exit;
 }
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 
 $poolCondition = '';
 if (!empty($TOPOS_POOL))
@@ -141,7 +141,7 @@ elseif (!empty($_GET['pool']))
 //  }
 //  catch (Topos_MySQL $e) {
 //    Topos::mysqli()->rollback();
-//    Topos::fatal(
+//    REST::fatal(
 //      'BAD_REQUEST',
 //      'Illegal regular expression.'
 //    );
@@ -149,7 +149,7 @@ elseif (!empty($_GET['pool']))
 //  $row = $result->fetch_row();
 //  if (!$row[0]) {
 //    Topos::mysqli()->rollback();
-//    Topos::fatal('NOT_FOUND', 'No matching token pools');
+//    REST::fatal('NOT_FOUND', 'No matching token pools');
 //  }
 
 $tokenCondition = empty($_GET['token']) ? '' :
@@ -186,7 +186,7 @@ EOS
 try {
   if (!($row = $result->fetch_row())) {
     Topos::mysqli()->rollback();
-    Topos::fatal('NOT_FOUND', 'No token available');
+    REST::fatal('NOT_FOUND', 'No token available');
   }
 
   $lockUUID = '';
@@ -228,7 +228,7 @@ catch (Topos_MySQL $e) {
 }
 
 if (!Topos::mysqli()->commit())
-  Topos::fatal(
+  REST::fatal(
     'SERVICE_UNAVAILABLE',
     'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
   );
@@ -258,7 +258,7 @@ switch ($type) {
     echo $url;
     break;
   default:
-    Topos::start_html('Leased token redirect');
+    Topos::html_start('Leased token redirect');
     echo "<p><a href=\"$url\">$row[0]</a></p>";
-    Topos::end_html();
+    Topos::html_end();
 }

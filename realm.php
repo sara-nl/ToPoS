@@ -24,12 +24,12 @@ $escRealm = Topos::escape_string($TOPOS_REALM);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ( empty($_POST['pool']) ||
        empty($_POST['tokens']) )
-    Topos::fatal('BAD_REQUEST', 'Missing one or more required parameters');
+    REST::fatal('BAD_REQUEST', 'Missing one or more required parameters');
   $pool = $_POST['pool'];
   $tokens = (int)($_POST['tokens']);
   if ( !preg_match('/^[\\w\\-.]+$/', $pool) ||
        !$tokens || $tokens > 1000000)
-    Topos::fatal('BAD_REQUEST', 'Illegal parameter value(s)');
+    REST::fatal('BAD_REQUEST', 'Illegal parameter value(s)');
   $escPoolName = Topos::escape_string($pool);
   Topos::real_query(
     "CALL `createTokens`({$escRealm}, {$escPoolName}, {$tokens});"
@@ -42,10 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   REST::header(array(
     'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
   ));
-  Topos::start_html('Realm');
+  echo REST::html_start('Realm');
   echo '<p>Pool populated successfully.</p>' .
        '<p><a href="./" rel="index">Back</a></p>';
-  Topos::end_html();
+  echo REST::html_end();
   exit;
 }
 
@@ -67,23 +67,23 @@ EOS
     throw $e;
   }
   if (!Topos::mysqli()->commit())
-    Topos::fatal(
+    REST::fatal(
       'SERVICE_UNAVAILABLE',
       'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
     );
   REST::header(array(
     'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
   ));
-  Topos::start_html('Pool');
+  echo REST::html_start('Pool');
   echo '<p>Realm destroyed successfully.</p>';
-  Topos::end_html();
+  echo REST::html_end();
   exit;
 }
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  Topos::fatal('NOT_MODIFIED');
+  REST::fatal('NOT_MODIFIED');
 
 
 $directory = ToposDirectory::factory(<<<EOS

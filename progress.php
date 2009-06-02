@@ -23,7 +23,7 @@ $escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool = Topos::escape_string($TOPOS_POOL);
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
   
 $width = 300;
 if (!empty($_GET['width']))
@@ -65,7 +65,7 @@ REST::header(array(
   'Cache-Control' => 'no-cache',
 ));
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-Topos::start_html('Pool');
+echo REST::html_start('Pool');
 ?><h1>Progress bar</h1>
 <table class="progress"><tbody>
 <tr>
@@ -77,4 +77,4 @@ Topos::start_html('Pool');
   </td>
 </tr>
 </tbody></table><?php
-Topos::end_html();
+echo REST::html_end();

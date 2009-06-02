@@ -4,6 +4,9 @@ SetOutputFilter DEFLATE
 
 AddType application/x-x509-ca-cert pem
 
+php_flag display_errors on
+php_flag display_startup_errors on
+
 RewriteEngine On
 
 # Forbidden:
@@ -18,6 +21,7 @@ RewriteRule ^pools/([\w\-.]+)/tokens$ /4/pools/$2/tokens/ [R=301,L]
 
 # Script redirects:
 RewriteRule ^newPool/?$ /4/newPool.php [L]
+RewriteRule ^phpinfo(/.*)?$ /4/phpinfo.php [L]
 RewriteRule ^pools/$ /4/pools.php/$1 [L]
 RewriteRule ^pools/([\w\-.]+)/$ /4/pool.php/$1 [L]
 RewriteRule ^pools/([\w\-.]+)/nextToken$ /4/nextToken.php/$1 [L]

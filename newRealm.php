@@ -46,6 +46,6 @@ REST::header( array(
   'Location' => $url,
   'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
 ));
-Topos::start_html('New realm redirect');
+echo REST::html_start('New realm redirect');
 echo "<p><a href=\"$url\">$url</a></p>";
-Topos::end_html();
+echo REST::html_end();

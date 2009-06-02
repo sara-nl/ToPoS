@@ -17,7 +17,10 @@
  * $Id$
  **************************************************************************/
 
-require_once(dirname(__FILE__) . '/REST_1.1/REST.php');
+require_once(dirname(__FILE__) . '/REST/REST.php');
+REST::handle_method_spoofing();
+REST::setHTML( array('Topos', 'html_start'), array('Topos', 'html_end') );
+
 #require_once('rest.php');
 
 #$debug = fopen(dirname(__FILE__) . '/debug.txt', 'a');
@@ -31,18 +34,14 @@ require_once(dirname(__FILE__) . '/REST_1.1/REST.php');
 date_default_timezone_set('Europe/Amsterdam');
 
 function sara_exception_handler(Exception $e) {
-  Topos::fatal(
-    'INTERNAL_SERVER_ERROR',
-    '<pre>' . htmlspecialchars($e->getTraceAsString() . "\n" . $e->getMessage()) . '</pre>'
+  REST::fatal(
+    REST::HTTP_INTERNAL_SERVER_ERROR,
+    '<pre id="message">' . $e->getMessage() . "</pre>\n<pre>" . $e->getTraceAsString() . '</pre>'
   );
 }
 set_exception_handler('sara_exception_handler');
 
 // Parse the PATH_INFO string, if present:
-/**
- * @var string
- */
-$TOPOS_REALM = null;
 /**
  * @var string
  */
@@ -54,8 +53,8 @@ $TOPOS_TOKEN = null;
 if ( !empty($_SERVER['PATH_INFO']) &&
      preg_match( '/\\/([\\w\\-.]+)(?:\\/(\\d+))?/',
                  $_SERVER['PATH_INFO'], $matches ) ) {
-  $TOPOS_POOL =  @$matches[2];
-  $TOPOS_TOKEN = @$matches[3];
+  $TOPOS_POOL =  @$matches[1];
+  $TOPOS_TOKEN = @$matches[2];
 }
 
 /**
@@ -116,11 +115,9 @@ public static function escape_string($string) {
 }
 
 
-private static $poolIds = array();
-public static function poolId($realmName, $poolName) {
-  $escRealmName = self::escape_string($realmName);
+public static function poolId($poolName) {
   $escPoolName = self::escape_string($poolName);
-  $result = self::query("SELECT getPoolId($escRealmName, $escPoolName);");
+  $result = self::query("SELECT getPoolId($escPoolName);");
   $row = $result->fetch_row();
   return $row[0];
 }
@@ -174,33 +171,39 @@ public static function fatal($status, $message = '') {
   $debug = fopen(dirname(__FILE__) . '/debug.txt', 'a');
   fwrite($debug, "\n\n{$status} {$message}\n" . var_export($_SERVER, true));
   fclose($debug);
-  return REST::fatal($status, $message, self::urlbase().'style.css');
+  return REST::fatal($status, $message);
 }
 
 
 /**
- * @param $title string
+ * @param $title string title in UTF-8
  */
-public static function start_html($title) {
-  echo REST::xml_header();
-  $indexURL = dirname($_SERVER['REQUEST_URI']);
-  if ($indexURL != '/') $indexURL .= '/';
-?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+public static function html_start($title) {
+  $t_title = htmlspecialchars($title, ENT_COMPAT, "UTF-8");
+  $t_index = REST::urlencode( dirname( $_SERVER['REQUEST_URI'] ) );
+  if ($t_index != '/') $t_index .= '/';
+  $t_stylesheet = self::urlbase() . 'style.css'; 
+  return REST::xml_header() . <<<EOS
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
 <head>
-  <title><?php echo htmlspecialchars($title); ?></title>
-  <link rel="stylesheet" type="text/css" href="<?php echo self::urlbase(); ?>style.css" />
-  <link rel="index" rev="child" type="application/xhtml+xml" href="<?php echo $indexURL; ?>"/>
+  <title>{$t_title}</title>
+  <link rel="stylesheet" type="text/css" href="{$t_stylesheet}" />
+  <link rel="index" rev="child" type="application/xhtml+xml" href="{$t_index}"/>
 </head><body>
-<span style="float: right;"><a rel="index" rev="child" href="<?php echo $indexURL; ?>">Index</a></span><?php
+<div id="div_header">
+<div id="div_index"><a rel="index" rev="child" href="{$t_index}">index</a></div>
+<h1>{$t_title}</h1>
+</div>
+EOS;
 }
 
 
 /**
  * Outputs HTML end-tags
  */
-public static function end_html() {
-  echo '</body></html>';
+public static function html_end() {
+  return '</body></html>';
 }
 
 
@@ -217,15 +220,16 @@ public static function show_message($message, $status, $location) {
     'Content-Type' => 'application/xhtml+xml; charset=UTF-8',
     'Location' => REST::rel2url($location)
   ));
-  self::start_html('Redirect');
-?><p><?php echo $message; ?></p>
-<script type="text/javascript">
+  echo REST::html_start('Redirect') . <<<EOS
+<p>{$message}</p>
+<script type="text/javascript"><![CDATA[
   setTimeout(
-    'window.location.href = "<?php echo $location; ?>";',
+    'window.location.href = "{$location}";',
     1000
   );
-</script><?php
-  self::end_html();
+]]></script>
+EOS;
+  echo REST::html_end();
   exit;
 }
 
@@ -279,7 +283,7 @@ private static $URLBASE = null;
 public static function urlbase() {
   if ( is_null( self::$URLBASE ) ) {
     //DAV::debug('$_SERVER: ' . var_export($_SERVER, true));
-    self::$URLBASE = REST::urlbase() . '/3/';
+    self::$URLBASE = REST::urlbase() . '/4/';
   }
   return self::$URLBASE;
 }
@@ -289,223 +293,3 @@ public static function urlbase() {
 
 
 
-/**
- * Renders directory content in various formats.
- */
-class ToposDirectory {
-
-
-  /**
-   * @var string
-   */
-  protected $html_form = "";
-
-
-  /**
-   * @var bool
-   */
-  protected $header_sent = false;
-
-
-  /**
-   * Abstract class has protected ctor;
-   */
-  protected function __construct($form) {
-    $this->html_form = $form;
-  }
-
-
-  /**
-   * @param string $type one of 'text/html', 'text/json', 'text/csv', 'text/plain'
-   * @return object ToposDirectory
-   */
-  public static function factory($html_form = null) {
-    //self::$html_form = $html_form;
-    $best_xhtml_type = REST::best_xhtml_type();
-    $type = REST::best_content_type(
-    array(
-    $best_xhtml_type => 1.0,
-        'text/plain' => 0.3,
-        'text/tdv' => 0.5,
-        'text/csv' => 0.8,
-        'application/json' => 1.0,
-    ), $best_xhtml_type
-    );
-    REST::header("{$type}; charset=UTF-8");
-    switch ($type) {
-      case 'application/xhtml+xml':
-      case 'text/html'            : return new ToposDirectoryHTML($html_form);
-      case 'text/tdv'             :
-      case 'text/plain'           : return new ToposDirectoryPlain($html_form);
-      case 'application/json'     : return new ToposDirectoryJSON($html_form);
-      case 'text/csv'             : return new ToposDirectoryCSV($html_form);
-    }
-  }
-
-  /**
-   * @param $name string
-   */
-  public function line($name, $size = '', $description = '') {
-    throw new Exception( 'Not implemented' );
-  }
-
-
-  /**
-   * Ends the output.
-   */
-  public function end() {
-    throw new Exception( 'Not implemented' );
-  }
-
-
-} // class ToposDirectory
-
-
-/**
- * Displays content in plain text format (tab delimited)
- */
-class ToposDirectoryPlain extends ToposDirectory {
-
-
-  /**
-   * @param $name string
-   * @return string
-   */
-  public function line($name, $size = '', $description = '') {
-    echo "{$name}\t{$size}\n";
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    echo '';
-  }
-
-
-} // class ToposDirectoryPlain
-
-
-/**
- * Displays content in plain text format (tab delimited)
- */
-class ToposDirectoryCSV extends ToposDirectory {
-
-  private function start() {
-    echo "Name,Size,Description\r\n";
-    $this->header_sent = true;
-  }
-
-  /**
-   * @param $name string
-   */
-  public function line($name, $size = '', $description = '') {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    $name = str_replace('"', '""', $name);
-    $size = str_replace('"', '""', $size);
-    $description = str_replace('"', '""', $description);
-    echo "\"{$name}\",\"{$size}\",\"{$description}\"\r\n";
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    echo '';
-  }
-
-
-} // class ToposDirectoryCSV
-
-
-/**
- * Displays content in plain text format (tab delimited)
- */
-class ToposDirectoryHTML extends ToposDirectory {
-
-
-  private function start() {
-    Topos::start_html('Directory index');
-    if ($this->html_form !== null)
-      echo $this->html_form;
-    echo <<<EOS
-<h1>Contents</h1>
-<table class="toc" id="directory_index"><tbody>
-<tr><th class="name">Name</th><th class="size">Size</th><th class="description">Description</th></tr>
-EOS;
-    $this->header_sent = true;
-  }
-
-  /**
-   * @param $name string
-   * @return string
-   */
-  public function line($name, $size = '', $description = '') {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    $is_dir = substr($name, -1) === '/';
-    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) .
-      '"><td class="name"><a rel="child" href="' . REST::urlencode($name) .
-      '">' . htmlentities($name) . "</a></td>
-      <td class=\"size\">{$size}</td><td class=\"description\">{$description}</td></tr>\n";
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    echo "</tbody></table>";
-    Topos::end_html();
-  }
-
-
-} // class ToposDirectoryHTML
-
-
-/**
- * Displays content in plain text format (tab delimited)
- * TODO: Should support streaming
- */
-class ToposDirectoryJSON extends ToposDirectory {
-
-
-  /**
-   * Contains a structure...
-   */
-  private $dir = null;
-
-  private function start() {
-    $this->dir = array(
-      'header' => array('filename', 'size', 'description'),
-      'lines'  => array(),
-    );
-  }
-
-  public function line($name, $size = '', $description = '') {
-    if (empty($this->dir))
-      $this->start();
-    $this->dir['lines'][] = array($name, $size, $description);
-  }
-
-  public function end() {
-    if (empty($this->dir))
-      $this->start();
-    echo json_encode($this->dir);
-  }
-
-} // class Directory_JSON

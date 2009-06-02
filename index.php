@@ -20,11 +20,11 @@
 require_once( 'include/global.php' );
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  Topos::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal('METHOD_NOT_ALLOWED');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  Topos::fatal('NOT_MODIFIED');
+  REST::fatal('NOT_MODIFIED');
   
-$directory = ToposDirectory::factory();
+$directory = RESTDirectory::factory();
 $directory->line('pools/', '', 'A list of all pools. Forbidden for most users, for security reasons.');
 $directory->line('newPool', '', 'Redirects to a new, empty pool.');
 $directory->line('reference_manual.pdf', filesize('reference_manual.pdf') . ' bytes', 'The official reference manual for this version of ToPoS.');
