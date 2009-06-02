@@ -53,14 +53,14 @@ EOS
     echo REST::html_end();
     exit;
   } else {
-    REST::fatal('NOT_FOUND');
+    REST::fatal(REST::HTTP_NOT_FOUND);
   }
 }
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  REST::fatal('NOT_MODIFIED');
+  REST::fatal(REST::HTTP_NOT_MODIFIED);
 
 $result = Topos::query(<<<EOS
 SELECT `tokenValue`, `tokenType`, `tokenCreated`,
@@ -72,7 +72,7 @@ WHERE `realmName` = {$escRealm}
 EOS
 );
 if (!($row = $result->fetch_row()))
-  REST::fatal('NOT_FOUND');
+  REST::fatal(REST::HTTP_NOT_FOUND);
 
 $headers = array(
   'Content-Type' => $row[1],

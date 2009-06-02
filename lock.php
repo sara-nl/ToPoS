@@ -43,13 +43,13 @@ EOS
       REST::html_end();
     exit;
   } else {
-    REST::fatal('NOT_FOUND');
+    REST::fatal(REST::HTTP_NOT_FOUND);
   }
 }
 
 if ( !in_array( $_SERVER['REQUEST_METHOD'],
                 array('HEAD', 'GET') ) )
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 
 if ( !empty($_GET['timeout']) &&
      ($timeout = (int)($_GET['timeout'])) > 0 ) {
@@ -61,7 +61,7 @@ WHERE `tokenLockUUID` = {$escLockUUID}
 EOS
   );
   if (!Topos::mysqli()->affected_rows)
-    REST::fatal('NOT_FOUND');
+    REST::fatal(REST::HTTP_NOT_FOUND);
 }
 
 $result = Topos::query(<<<EOS
@@ -72,7 +72,7 @@ WHERE `tokenLockUUID` = $escLockUUID
 EOS
 );
 if (!($row = $result->fetch_row()))
-  REST::fatal('NOT_FOUND');
+  REST::fatal(REST::HTTP_NOT_FOUND);
 $tokenURL = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
   '/pools/' . REST::urlencode($row[0]) . '/tokens/' . $row[1];
   

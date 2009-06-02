@@ -24,12 +24,12 @@ $escRealm = Topos::escape_string($TOPOS_REALM);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ( empty($_POST['pool']) ||
        empty($_POST['tokens']) )
-    REST::fatal('BAD_REQUEST', 'Missing one or more required parameters');
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Missing one or more required parameters');
   $pool = $_POST['pool'];
   $tokens = (int)($_POST['tokens']);
   if ( !preg_match('/^[\\w\\-.]+$/', $pool) ||
        !$tokens || $tokens > 1000000)
-    REST::fatal('BAD_REQUEST', 'Illegal parameter value(s)');
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal parameter value(s)');
   $escPoolName = Topos::escape_string($pool);
   Topos::real_query(
     "CALL `createTokens`({$escRealm}, {$escPoolName}, {$tokens});"
@@ -68,7 +68,7 @@ EOS
   }
   if (!Topos::mysqli()->commit())
     REST::fatal(
-      'SERVICE_UNAVAILABLE',
+      REST::HTTP_SERVICE_UNAVAILABLE,
       'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
     );
   REST::header(array(
@@ -81,9 +81,9 @@ EOS
 }
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  REST::fatal('NOT_MODIFIED');
+  REST::fatal(REST::HTTP_NOT_MODIFIED);
 
 
 $directory = ToposDirectory::factory(<<<EOS

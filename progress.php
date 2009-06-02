@@ -23,7 +23,7 @@ $escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool = Topos::escape_string($TOPOS_POOL);
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
   
 $width = 300;
 if (!empty($_GET['width']))

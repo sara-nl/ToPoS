@@ -20,9 +20,9 @@
 require_once( 'include/global.php' );
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  REST::fatal('NOT_MODIFIED');
+  REST::fatal(REST::HTTP_NOT_MODIFIED);
   
 $directory = RESTDirectory::factory();
 $directory->line('pools/', '', 'A list of all pools. Forbidden for most users, for security reasons.');

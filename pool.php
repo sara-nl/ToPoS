@@ -21,18 +21,37 @@ require_once('include/global.php');
 
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
      strpos( @$_SERVER['CONTENT_TYPE'], 'application/x-www-form-urlencoded' ) === 0 ) {
-  $_POST['pool'] = $TOPOS_POOL;
-  require_once('realm.php');
+  if ( empty($_POST['tokens']) )
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Missing one or more required parameters');
+  $tokens = (int)($_POST['tokens']);
+  if ( !preg_match('/^[\\w\\-.]+$/', $TOPOS_POOL) ||
+       !$tokens || $tokens > 1000000)
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal parameter value(s)');
+  $escPoolName = Topos::escape_string($TOPOS_POOL);
+  Topos::real_query(
+    "CALL `createTokens`({$escRealm}, {$escPoolName}, {$tokens});"
+  );
+  Topos::log('populate', array(
+    'realmName' => $TOPOS_REALM,
+    'poolName' => $TOPOS_POOL,
+    'tokens' => $tokens
+  ));
+  REST::header(array(
+    'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
+  ));
+  echo REST::html_start('Realm');
+  echo '<p>Pool populated successfully.</p>' .
+       '<p><a href="./" rel="index">Back</a></p>';
+  echo REST::html_end();
   exit;
 }
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool = Topos::escape_string($TOPOS_POOL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Check if we have the right mime type:
   if ( strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) !== 0 )
-    REST::fatal('UNSUPPORTED_MEDIA_TYPE');
+    REST::fatal(REST::HTTP_UNSUPPORTED_MEDIA_TYPE);
   // For this operation, we need MySQL transactions.
   Topos::real_query('START TRANSACTION;');
   try {
@@ -51,7 +70,7 @@ EOS
           );
           if (!Topos::mysqli()->affected_rows) {
             Topos::mysqli()->rollback();
-            REST::fatal('NOT_FOUND', "Token $deleteTokenId not found");
+            REST::fatal(REST::HTTP_NOT_FOUND, "Token $deleteTokenId not found");
           }
           Topos::log('delete', array(
             'realmName' => $TOPOS_REALM,
@@ -84,7 +103,7 @@ EOS
             continue;
           if ( $file['error'][$key] !== UPLOAD_ERR_OK )
             REST::fatal(
-              'BAD_REQUEST',
+              REST::HTTP_BAD_REQUEST,
               htmlentities("Errno {$file['error'][$key]} occured during file upload.")
             );
           $bindTokenType = @$file['type'][$key];
@@ -97,7 +116,7 @@ EOS
           fclose($stream);
           if ( !$stmt->execute() ) {
             Topos::mysqli()->rollback();
-            REST::fatal('INTERNAL_SERVER_ERROR', $stmt->error);
+            REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, $stmt->error);
           }
           $t_upload_map[$stmt->insert_id] = empty($filename) ? $paramname : $filename;
           Topos::log('create', array(
@@ -115,7 +134,7 @@ EOS
   }
   if (!Topos::mysqli()->commit())
     REST::fatal(
-      'SERVICE_UNAVAILABLE',
+      REST::HTTP_SERVICE_UNAVAILABLE,
       'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
     );
 
@@ -176,7 +195,7 @@ EOS
   }
   if (!Topos::mysqli()->commit())
     REST::fatal(
-      'SERVICE_UNAVAILABLE',
+      REST::HTTP_SERVICE_UNAVAILABLE,
       'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
     );
   REST::header(array(
@@ -190,9 +209,9 @@ EOS
 
 
 if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
+  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-  REST::fatal('NOT_MODIFIED');
+  REST::fatal(REST::HTTP_NOT_MODIFIED);
 
 $t_pool = htmlentities($TOPOS_POOL);
 $directory = ToposDirectory::factory(<<<EOS
