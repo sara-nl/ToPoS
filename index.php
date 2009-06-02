@@ -25,7 +25,7 @@ if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   Topos::fatal('NOT_MODIFIED');
   
 $directory = ToposDirectory::factory();
-$directory->line('realms/', '', 'A list of all realms. Forbidden for most users, for security reasons.');
-$directory->line('newRealm', '', 'Redirects to a new, empty realm.');
-$directory->line('topos3_reference_manual.pdf', filesize('topos3_reference_manual.pdf') . ' bytes', 'The official reference manual for this version of ToPoS.');
+$directory->line('pools/', '', 'A list of all pools. Forbidden for most users, for security reasons.');
+$directory->line('newPool', '', 'Redirects to a new, empty pool.');
+$directory->line('reference_manual.pdf', filesize('reference_manual.pdf') . ' bytes', 'The official reference manual for this version of ToPoS.');
 $directory->end();

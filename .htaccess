@@ -11,26 +11,19 @@ RewriteEngine On
 #RewriteRule ^realms/$ - [F]
 
 # Directory redirects:
-RewriteRule ^realms$ /3/realms/ [R=301,L]
-RewriteRule ^realms/([\w\-.]+)$ /3/realms/$1/ [R=301,L]
-RewriteRule ^realms/([\w\-.]+)/pools$ /3/realms/$1/pools/ [R=301,L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)$ /3/realms/$1/pools/$2/ [R=301,L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/tokens$ /3/realms/$1/pools/$2/tokens/ [R=301,L]
+RewriteRule ^pools$ /4/pools/ [R=301,L]
+RewriteRule ^pools/([\w\-.]+)$ /4/pools/$2/ [R=301,L]
+RewriteRule ^pools/([\w\-.]+)/locks$ /4/pools/$2/locks/ [R=301,L]
+RewriteRule ^pools/([\w\-.]+)/tokens$ /4/pools/$2/tokens/ [R=301,L]
 
 # Script redirects:
-RewriteRule ^newRealm/?$ /3/newRealm.php [L]
-RewriteRule ^realms/$ /3/realms.php [L]
-RewriteRule ^realms/([\w\-.]+)/$ /3/realm.php/$1 [L]
-RewriteRule ^realms/([\w\-.]+)/nextToken$ /3/nextToken.php/$1 [L]
-RewriteRule ^realms/([\w\-.]+)/locks/$ /3/locks.php/$1 [L]
-RewriteRule ^realms/([\w\-.]+)/locks/([0-9A-Fa-f\-]+)$ /3/lock.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/$ /3/pools.php/$1 [L]
-#RewriteCond %{REQUEST_METHOD} =POST
-#RewriteCond %{HTTP:Content-Type} ^application/x-www-form-urlencoded
-#RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/$ /3/realm.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/$ /3/pool.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/nextToken$ /3/nextToken.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/progress$ /3/progress.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/tokens/$ /3/tokens.php/$1/$2 [L]
-RewriteRule ^realms/([\w\-.]+)/pools/([\w\-.]+)/tokens/(\d+)$ /3/token.php/$1/$2/$3 [L]
+RewriteRule ^newPool/?$ /4/newPool.php [L]
+RewriteRule ^pools/$ /4/pools.php/$1 [L]
+RewriteRule ^pools/([\w\-.]+)/$ /4/pool.php/$1 [L]
+RewriteRule ^pools/([\w\-.]+)/nextToken$ /4/nextToken.php/$1 [L]
+RewriteRule ^pools/([\w\-.]+)/locks/$ /4/locks.php/$1 [L]
+RewriteRule ^pools/([\w\-.]+)/locks/([0-9A-Fa-f\-]+)$ /4/lock.php/$1/$2 [L]
+RewriteRule ^pools/([\w\-.]+)/progress$ /4/progress.php/$1/$2 [L]
+RewriteRule ^pools/([\w\-.]+)/tokens/$ /4/tokens.php/$1\ [L]
+RewriteRule ^pools/([\w\-.]+)/tokens/(\d+)$ /4/token.php/$1/$2 [L]
 

@@ -52,9 +52,8 @@ $TOPOS_POOL =  null;
  */
 $TOPOS_TOKEN = null;
 if ( !empty($_SERVER['PATH_INFO']) &&
-     preg_match( '/\\/([\\w\\-.]+)(?:\\/([\\w\\-.]+))?(?:\\/(\\d+))?/',
+     preg_match( '/\\/([\\w\\-.]+)(?:\\/(\\d+))?/',
                  $_SERVER['PATH_INFO'], $matches ) ) {
-  $TOPOS_REALM = @$matches[1];
   $TOPOS_POOL =  @$matches[2];
   $TOPOS_TOKEN = @$matches[3];
 }
@@ -96,7 +95,7 @@ private static $MYSQLI = null;
 public static function mysqli() {
   if (self::$MYSQLI === null) {
     self::$MYSQLI = new mysqli(
-      'localhost', 'topos', 'T49WpiQT', 'topos_devel'
+      'localhost', 'topos', 'T49WpiQT', 'topos_4'
     );
     if ( !self::$MYSQLI )
       throw new Topos_MySQL(mysqli_connect_error());
