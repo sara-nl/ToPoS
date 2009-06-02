@@ -34,14 +34,14 @@ EOS
   );
 
 $result = Topos::query(<<<EOS
-SELECT `realmName`, COUNT(*)
+SELECT `poolName`, COUNT(*)
 FROM `Pools` NATURAL JOIN `Tokens`
-GROUP BY `realmName`
+GROUP BY `poolId`
 ORDER BY 1;
 EOS
 );
 
-$directory = ToposDirectory::factory();
+$directory = RESTDirectory::factory();
 while ($row = $result->fetch_row())
-  $directory->line($row[0], $row[1] . ' tokens');
+  $directory->line(urlencode($row[0]) . '/', $row[1] . ' tokens');
 $directory->end();

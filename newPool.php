@@ -19,22 +19,9 @@
 
 require_once('include/global.php');
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
+$file = fopen( '/dev/urandom', 'r' );
+$random = bin2hex(fread($file, 12));
+fclose($file);
 
-
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal('METHOD_NOT_ALLOWED');
-
-$result = Topos::query(<<<EOS
-SELECT `poolName`, COUNT(*)
-FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `realmName` = {$escRealm}
-GROUP BY `poolId`
-ORDER BY 1;
-EOS
-);
-
-$directory = ToposDirectory::factory();
-while ($row = $result->fetch_row())
-  $directory->line( $row[0] . '/', $row[1] . ' tokens', 'A token pool directory');
-$directory->end();
+$url = Topos::urlbase() . "pools/$random/";
+REST::redirect(REST::HTTP_SEE_OTHER, $url);
