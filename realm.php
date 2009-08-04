@@ -80,8 +80,7 @@ EOS
   exit;
 }
 
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+REST::require_method('HEAD', 'GET');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   REST::fatal(REST::HTTP_NOT_MODIFIED);
 

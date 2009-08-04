@@ -51,7 +51,7 @@ $TOPOS_POOL =  null;
  */
 $TOPOS_TOKEN = null;
 if ( !empty($_SERVER['PATH_INFO']) &&
-     preg_match( '/\\/([\\w\\-.]+)(?:\\/(\\d+))?/',
+     preg_match( '/\\/([\\w\\-.]+)(?:\\/([\\da-fA-F\\-]+))?/',
                  $_SERVER['PATH_INFO'], $matches ) ) {
   $TOPOS_POOL =  @$matches[1];
   $TOPOS_TOKEN = @$matches[2];
@@ -217,7 +217,7 @@ public static function html_end() {
 public static function show_message($message, $status, $location) {
   REST::header(array(
     'status' => $status,
-    'Content-Type' => 'application/xhtml+xml; charset=UTF-8',
+    'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8',
     'Location' => REST::rel2url($location)
   ));
   echo REST::html_start('Redirect') . <<<EOS
@@ -231,42 +231,6 @@ public static function show_message($message, $status, $location) {
 EOS;
   echo REST::html_end();
   exit;
-}
-
-
-private static $transactionId = NULL;
-/**
- * @todo
- * @return unknown_type
- */
-public static function transactionId() {
-  if (is_null(self::$transactionId)) {
-    $url = self::escape_string($_SERVER['REQUEST_URI']);
-    $query = <<<EOS
-INSERT INTO `Transactions` (`transactionAddress`, `transactionTimestamp`,
-                            `transactionMethod`,  `transactionURL`)
-VALUES ('{$_SERVER['REMOTE_ADDR']}', UNIX_TIMESTAMP(),
-        '{$_SERVER['REQUEST_METHOD']}', {$url});
-EOS;
-    self::real_query($query);
-    self::$transactionId = self::mysqli()->insert_id;
-  }
-  return self::$transactionId;
-}
-
-
-public static function log($action, $params) {
-  $logEntry = array();
-  foreach ($params as $key => $value)
-    $logEntry[] = "$key=$value";
-  $logEntry = join('&', $logEntry);
-  $logEntry = self::escape_string("$action?$logEntry");
-  $transactionId = self::transactionId();
-  $query = <<<EOS
-INSERT INTO `Logs` (`transactionId`, `logEntry`)
-VALUES ( $transactionId, $logEntry );
-EOS;
-  self::real_query($query);
 }
 
 

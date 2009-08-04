@@ -19,10 +19,10 @@
 
 require_once('include/global.php');
 
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+REST::require_method('HEAD', 'GET');
 
-if (!preg_match('/^(?:145\\.100\\.(?:6|7|15)\\.|82\\.93\\.61\\.215)/', $_SERVER['REMOTE_ADDR']))
+if ( !preg_match('/^(?:145\\.100\\.(?:6|7|15)\\.|82\\.93\\.61\\.215)/',
+     $_SERVER['REMOTE_ADDR']) )
   REST::fatal(
     REST::HTTP_FORBIDDEN,
     <<<EOS
@@ -41,7 +41,10 @@ ORDER BY 1;
 EOS
 );
 
-$directory = RESTDirectory::factory();
+$directory = RESTDir::factory();
 while ($row = $result->fetch_row())
-  $directory->line(urlencode($row[0]) . '/', $row[1] . ' tokens');
+  $directory->line(
+    urlencode($row[0]) . '/',
+    array( 'Size' => $row[1] . ' tokens' )
+  );
 $directory->end();

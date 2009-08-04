@@ -19,29 +19,45 @@
 
 require_once('include/global.php');
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool = Topos::escape_string($TOPOS_POOL);
 
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+REST::require_method('HEAD', 'GET');
   
 $width = 300;
 if (!empty($_GET['width']))
   $width = (int)($_GET['width']);
 
 $result = Topos::query(<<<EOS
-SELECT COUNT(*), SUM(`poolName` = {$escPool})
+SELECT COUNT(*)
 FROM `Tokens` NATURAL JOIN `Pools`
-WHERE `realmName` = $escRealm;
+WHERE `poolName` = $escPool;
 EOS
 );
-$row = $result->fetch_row();
-$total = (int)($row[0]);
-$done = (int)($row[1]);
-if (!empty($_GET['total']))
+$tokens = $result->fetch_row();
+$tokens = (int)($tokens[0]);
+if (empty($_GET['total']))
+  REST::fatal(
+    REST::HTTP_BAD_REQUEST, <<<EOS
+<p>Missing required parameter <tt>total</tt>.</p>
+<form action="progress" method="get">
+<input type="text" name="total"/> Total number of tokens<br/>
+<input type="submit" value="Show progress bar"/>
+</form>
+EOS
+  );
   $total = (int)($_GET['total']);
 if ($total === 0) $total = 1;
-$percentage = 100 * $done / $total;
+$percentage = 100 * $tokens / $total;
+if ($percentage > 100)
+  REST::fatal(
+    REST::HTTP_BAD_REQUEST, <<<EOS
+<p>The total number of tokens cannot be smaller than the number of tokens in this pool.</p>
+<form action="progress" method="get">
+<input type="text" name="total"/> Total number of tokens<br/>
+<input type="submit" value="Show progress bar"/>
+</form>
+EOS
+  );
 
 $bct = REST::best_content_type(
   array('text/html' => 1,
@@ -55,7 +71,7 @@ if ($bct === 'text/plain') {
     'Cache-Control' => 'no-cache',
   ));
   if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-  echo $done / $total;
+  echo $tokens / $total;
   exit;
 }
 
@@ -65,14 +81,13 @@ REST::header(array(
   'Cache-Control' => 'no-cache',
 ));
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-echo REST::html_start('Pool');
-?><h1>Progress bar</h1>
-<table class="progress"><tbody>
+echo REST::html_start('Progress');
+?><table class="progress"><tbody>
 <tr>
-  <td style="width: <?php echo $width * $done / $total; ?>pt;" class="done">
+  <td style="width: <?php echo $width * $tokens / $total; ?>pt;" class="done">
   <?php if ($percentage >= 50) echo sprintf('%.1f%%', $percentage); ?>
   </td>
-  <td style="width: <?php echo $width - $width * $done / $total; ?>pt;" class="todo">
+  <td style="width: <?php echo $width - $width * $tokens / $total; ?>pt;" class="todo">
   <?php if ($percentage < 50) echo sprintf('%.1f%%', $percentage); ?>
   </td>
 </tr>

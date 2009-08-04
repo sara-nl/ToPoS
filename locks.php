@@ -19,21 +19,20 @@
 
 require_once('include/global.php');
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
+$escPool = Topos::escape_string($TOPOS_POOL);
 
-
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+REST::require_method('HEAD', 'GET');
 
 $result = Topos::query(<<<EOS
-SELECT `tokenLockUUID`
+SELECT `tokenLockUUID`, `tokenLockDescription`
 FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `realmName` = {$escRealm} AND `tokenLockTimeout` > UNIX_TIMESTAMP()
+WHERE `poolName` = {$escPool}
+  AND `tokenLockTimeout` > UNIX_TIMESTAMP()
 ORDER BY 1;
 EOS
 );
 
-$directory = ToposDirectory::factory();
+$directory = RESTDir::factory();
 while ($row = $result->fetch_row())
-  $directory->line( $row[0] );
+  $directory->line( $row[0], array( 'Description' => $row[1] ) );
 $directory->end();

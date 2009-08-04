@@ -19,26 +19,151 @@
 
 require_once('include/global.php');
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
-$escPool  = Topos::escape_string($TOPOS_POOL);
+$escPool = Topos::escape_string($TOPOS_POOL);
 
-if ( !in_array( $_SERVER['REQUEST_METHOD'],
-                array('HEAD', 'GET') ) )
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+// Handle the creation of a number of tokens, set by the user.
+if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
+     strpos( @$_SERVER['CONTENT_TYPE'], 'application/x-www-form-urlencoded' ) === 0 ) {
+  if ( empty($_POST['tokens']) )
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Missing required parameter "tokens"');
+  $tokens = (int)($_POST['tokens']);
+  if ( !$tokens || $tokens > 1000000 )
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens"');
+  Topos::real_query(
+    "CALL `createTokens`({$escPool}, {$tokens});"
+  );
+  REST::fatal(REST::HTTP_ACCEPTED);
+}
 
-$result = Topos::query(<<<EOS
-SELECT `tokenId`, `tokenLength`
+// Handle upload of multiple tokens in a multipart/form-data request body:
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  // Check if we have the right mime type:
+  if ( strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) !== 0 )
+    REST::fatal(REST::HTTP_UNSUPPORTED_MEDIA_TYPE);
+  // For this operation, we need MySQL transactions.
+  Topos::real_query('START TRANSACTION;');
+  try {
+    Topos::real_query('SET foreign_key_checks = 0;');
+    $t_upload_map = array();
+    if (!empty($_FILES)) {
+      $poolId = Topos::poolId($TOPOS_POOL);
+      $query1 = <<<EOS
+INSERT INTO `TokenValues` (
+  `tokenValue`
+) VALUES (?);
+EOS;
+      $query2 = <<<EOS
+INSERT INTO `Tokens` (
+  `tokenId`, `poolId`, `tokenName`, `tokenType`, `tokenLength`, `tokenCreated`
+) VALUES (?, {$poolId}, ?, ?, ?, UNIX_TIMESTAMP());
+EOS;
+      $stmt1 = Topos::mysqli()->prepare($query1);
+      $stmt2 = Topos::mysqli()->prepare($query2);
+      $bindTokenValue = $bindTokenId = $bindTokenType = $bindTokenLength = $bindTokenName = null;
+      $stmt1->bind_param("b", $bindTokenValue);
+      $stmt2->bind_param("issi", $bindTokenId, $bindTokenName, $bindTokenType, $bindTokenLength);
+      foreach ($_FILES as $paramname => $file) {
+        if (!is_array( $file['error'] ) ) {
+          $file['name'    ] = array( $file['name'    ] );
+          $file['error'   ] = array( $file['error'   ] );
+          $file['type'    ] = array( $file['type'    ] );
+          $file['tmp_name'] = array( $file['tmp_name'] );
+          $file['size'    ] = array( $file['size'    ] );
+        }
+        foreach ( $file['name'] as $key => $filename ) {
+          if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
+            continue;
+          if ( $file['error'][$key] !== UPLOAD_ERR_OK )
+            REST::fatal(
+              REST::HTTP_BAD_REQUEST,
+              "Errno {$file['error'][$key]} occured during file upload."
+            );
+          $stream = fopen( $file['tmp_name'][$key], 'r' );
+          while ( !feof($stream) )
+            $stmt1->send_long_data( 0, fread( $stream, 8192 ) );
+          fclose($stream);
+          if ( !$stmt1->execute() ) {
+            Topos::mysqli()->rollback();
+            REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, 'X' .$stmt1->error);
+          }
+          $bindTokenId = $stmt1->insert_id;
+          
+          $bindTokenName = empty($filename) ? '' : $filename;
+          $bindTokenType = empty($file['type'][$key])
+            ? 'application/octet-stream' : $file['type'][$key];
+          $bindTokenLength = $file['size'][$key];
+          if ( !$stmt2->execute() ) {
+            Topos::mysqli()->rollback();
+            REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, 'Y'.$stmt2->error);
+          }
+//          $t_upload_map[$stmt1->insert_id] = array(
+//            'Original Name' => $bindTokenName,
+//            'Content-Type' => $bindTokenType,
+//            'Content-Length' => $bindTokenLength
+//          );
+        } // foreach()
+      } // foreach()
+    } // if()
+    Topos::real_query('SET foreign_key_checks = 1;');
+  } // try
+  catch (Topos_MySQL $e) {
+    Topos::mysqli()->rollback();
+    throw $e;
+  }
+  if (!Topos::mysqli()->commit())
+    REST::fatal(
+      REST::HTTP_SERVICE_UNAVAILABLE,
+      'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
+    );
+
+  REST::fatal(REST::HTTP_ACCEPTED);
+}
+
+
+REST::require_method('HEAD', 'GET');
+
+$query = <<<EOS
+SELECT `tokenId`, `tokenLength`, `tokenType`, `tokenName`, `tokenLockUUID`,
+       `tokenLockTimeout` - UNIX_TIMESTAMP()
 FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `realmName` = {$escRealm}
-  AND `poolName`  = {$escPool}
+WHERE `poolName`  = {$escPool}
 ORDER BY 1;
-EOS
-);
+EOS;
+$result = Topos::query($query);
 
-$directory = ToposDirectory::factory();
+$form = <<<EOS
+<h2>Forms</h2>
+<h3>Populate this pool</h3>
+<form action="./" method="post">
+# tokens: <input type="text" name="tokens"/>
+<input type="submit" value="Populate"/>
+</form>
+<h3>Create tokens</h3>
+<form action="./" method="post" enctype="multipart/form-data">
+<input type="file" name="create[]" /> File 1<br />
+<input type="file" name="create[]" /> File 2<br />
+<input type="file" name="create[]" /> File <i>n</i><br />
+<input type="submit" value="Post file(s)" />
+</form>
+EOS;
+$directory = RESTDir::factory('Tokens')->setForm($form);
+header('X-Token-Count: ' . $result->num_rows);
+
 while ($row = $result->fetch_row())
   $directory->line(
-    $row[0], $row[1] . ' bytes',
-    '<form action="' . $row[0] . '?http_method=DELETE" method="post"><input type="submit" value="Delete this token" /></form>'
+    $row[0], array( 'Size' => $row[1] . ' B',
+                    'Content-Type' => $row[2],
+                    'Original Name' => $row[3],
+                    'LockTokenHTML' => ($row[5] > 0 ? "<a href=\"../locks/{$row[4]}\">{$row[4]}</a>" : ''),
+                    'Timeout' => (
+                      $row[5] > 0
+                      ? sprintf( '%02d:%02d:%02d s',
+                                 ($row[5] / 3600),
+                                 ($row[5] / 60 % 60),
+                                 ($row[5] % 60)
+                        )
+                      : ''
+                    ),
+    )
   );
 $directory->end();

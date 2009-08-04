@@ -19,20 +19,18 @@
 
 require_once('include/global.php');
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
 $escPool = Topos::escape_string($TOPOS_POOL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   $retries = 1;
   while ($retries) {
     try {
-      Topos::real_query(<<<EOS
+      $query = <<<EOS
 DELETE `Tokens`.* FROM `Tokens` NATURAL JOIN `Pools`
 WHERE `tokenId` = {$TOPOS_TOKEN}
-  AND `realmName` = {$escRealm}
   AND `poolName` = {$escPool};
-EOS
-      );
+EOS;
+      Topos::real_query($query);
       $retries = 0;
     }
     catch (Topos_Retry $e) {
@@ -40,11 +38,6 @@ EOS
     }
   }
   if (Topos::mysqli()->affected_rows) {
-    Topos::log('delete', array(
-      'realmName' => $TOPOS_REALM,
-      'poolName' => $TOPOS_POOL,
-      'tokenId' => $TOPOS_TOKEN,
-    ));
     REST::header(array(
       'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
     ));
@@ -57,20 +50,18 @@ EOS
   }
 }
 
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
+REST::require_method('HEAD', 'GET');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   REST::fatal(REST::HTTP_NOT_MODIFIED);
 
-$result = Topos::query(<<<EOS
-SELECT `tokenValue`, `tokenType`, `tokenCreated`,
+$query = <<<EOS
+SELECT `tokenValue`, `tokenType`, `tokenCreated`, `tokenName`,
        IF(`tokenLockTimeout` > UNIX_TIMESTAMP(),`tokenLockUUID`,NULL)
-FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `realmName` = {$escRealm}
-  AND `poolName`  = {$escPool}
+FROM `Pools` NATURAL JOIN `Tokens` NATURAL JOIN `TokenValues`
+WHERE `poolName`  = {$escPool}
   AND `tokenId`   = {$TOPOS_TOKEN};
-EOS
-);
+EOS;
+$result = Topos::query($query);
 if (!($row = $result->fetch_row()))
   REST::fatal(REST::HTTP_NOT_FOUND);
 
@@ -79,10 +70,13 @@ $headers = array(
   'Content-Length' => strlen($row[0]),
   'Last-Modified' => REST::http_date($row[2]),
 );
-if ($row[3]) {
-  $headers['Topos-OpaqueLockToken'] = "opaquelocktoken:{$row[3]}";
-  $headers['Topos-LockURL'] = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
-    '/locks/' . $row[3];
+if (!empty($row[3]))
+  $headers['Content-Disposition'] = 'attachment; filename="' . $row[3] . '"';
+  
+if ($row[4]) {
+  $headers['X-Topos-OpaqueLockToken'] = "opaquelocktoken:{$row[4]}";
+  $headers['X-Topos-LockURL'] = Topos::urlbase() . 'pools/' . REST::urlencode($TOPOS_POOL) .
+    '/locks/' . $row[4];
 }
 REST::header($headers);
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;

@@ -20,50 +20,49 @@
 require_once('include/global.php');
 
 
-$escRealm = Topos::escape_string($TOPOS_REALM);
+$escPool = Topos::escape_string($TOPOS_POOL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
-  if (empty($TOPOS_POOL)) $TOPOS_POOL = $_GET['pool'];
-  if (empty($TOPOS_POOL))
-    REST::fatal(
-      REST::HTTP_BAD_REQUEST, 'Missing required pool name'
-    );
   // For this operation, we need MySQL transactions.
   Topos::real_query('START TRANSACTION;');
   try {
     if (isset($_GET['delete'])) {
-      if (!is_array($_GET['delete']))
-        $_GET['delete'] = preg_split(
-          '/[\\D]+/', $_GET['delete'], -1, PREG_SPLIT_NO_EMPTY
+      if (!is_string($_GET['delete'])) {
+        Topos::mysqli()->rollback();
+        REST::fatal(
+          REST::HTTP_BAD_REQUEST,
+          'Illegal value for delete parameter.'
         );
-      foreach ( $_GET['delete'] as $delete )
-        if (($deleteTokenId = (int)($delete))) {
-          Topos::real_query(<<<EOS
+      }
+      preg_match('/\\d+$/', $_GET['delete'], $matches);
+      $delete = (int)($matches[0]);
+      Topos::real_query(<<<EOS
 DELETE `Tokens`.* FROM `Tokens` NATURAL JOIN `Pools`
-WHERE `tokenId` = $deleteTokenId
-  AND `realmName` = {$escRealm};
+WHERE `tokenId` = $delete
+  AND `poolName` = {$escPool};
 EOS
-          );
-          if (!Topos::mysqli()->affected_rows) {
-            Topos::mysqli()->rollback();
-            REST::fatal(REST::HTTP_NOT_FOUND, "Token $deleteTokenId not found");
-          }
-          Topos::log('delete', array(
-            'realmName' => $TOPOS_REALM,
-            'poolName'  => $TOPOS_POOL,
-            'tokenId'   => $deleteTokenId,
-          ));
-        } // foreach() if()
+      );
+      if (!Topos::mysqli()->affected_rows) {
+        Topos::mysqli()->rollback();
+        REST::fatal(REST::HTTP_NOT_FOUND, "Token $deleteTokenId not found");
+      }
     } // if()
-    $escPool = Topos::escape_string($TOPOS_POOL);
-    $tokenType = empty($_SERVER['CONTENT_TYPE']) ?
-      'application/octet-stream' : $_SERVER['CONTENT_TYPE'];
-    $tokenType = Topos::escape_string($tokenType);
-    $stmt = Topos::mysqli()->prepare(<<<EOS
-INSERT INTO `Tokens`
-       (`poolId`, `tokenValue`, `tokenType`, `tokenCreated`)
-VALUES (getPoolId({$escRealm}, {$escPool}), ?, {$tokenType}, UNIX_TIMESTAMP());
-EOS
+    $tokenType = Topos::escape_string(
+      empty($_SERVER['CONTENT_TYPE'])
+        ? 'application/octet-stream'
+        : $_SERVER['CONTENT_TYPE']
+    );
+    $tokenName = '';
+    if (!empty($_SERVER['HTTP_CONTENT_DISPOSITION'])) {
+      if (preg_match('/;\\s*filename\\s*=\\s*"((?:[^"\\\\]|\\\\.)+)"/',
+                     $_SERVER['HTTP_CONTENT_DISPOSITION'], $matches))
+        $tokenName = $matches[1];
+    }
+    $tokenName = Topos::escape_string($tokenName);
+    
+    Topos::real_query('SET foreign_key_checks = 0;');
+    $stmt = Topos::mysqli()->prepare(
+      'INSERT INTO `TokenValues` (`tokenValue`) VALUES (?);'
     );
     $null = null;
     $stmt->bind_param("b", $null);
@@ -76,12 +75,17 @@ EOS
       REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, $stmt->error);
     }
     $tokenId = Topos::mysqli()->insert_id;
-    Topos::real_query("UPDATE `Tokens` SET `tokenLength` = LENGTH(`tokenValue`) WHERE `tokenId` = $tokenId");
-    Topos::log('create', array(
-      'realmName' => $TOPOS_REALM,
-      'poolName' => $TOPOS_POOL,
-      'tokenId' => $tokenId,
-    ));
+    
+    Topos::real_query(<<<EOS
+INSERT INTO `Tokens`
+       (`tokenId`, `poolId`, `tokenType`, `tokenName`, `tokenCreated`, `tokenLength`)
+SELECT {$tokenId}, getPoolId({$escPool}), {$tokenType}, {$tokenName},
+       UNIX_TIMESTAMP(), LENGTH(`tokenValue`)
+FROM `TokenValues`
+WHERE `tokenId` = {$tokenId};
+EOS
+    );
+    Topos::real_query('SET foreign_key_checks = 1;');
   }
   catch (Topos_MySQL $e) {
     Topos::mysqli()->rollback();
@@ -98,39 +102,26 @@ EOS
       REST::best_xhtml_type() => 1.0,
     ), REST::best_xhtml_type()
   );
-  $tokenURL = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
-    '/pools/' . REST::urlencode($TOPOS_POOL) . '/tokens/' . $tokenId;
-  REST::header(array(
-    'Content-Type' => "{$type}; charset=UTF-8",
-    'status' => 'CREATED',
-    'Location' => $tokenURL,
-  ));
-  switch ($type) {
-    case 'text/plain':
-      echo $tokenURL;
-      break;
-    default:
-      echo REST::html_start('New token created');
-      echo "<p><a href=\"$tokenURL\">$tokenId</a></p>";
-      echo REST::html_end();
-  }
-  exit;
+  $tokenURL = Topos::urlbase() . 'pools/' . REST::urlencode($TOPOS_POOL) . '/tokens/' . $tokenId;
+  REST::created($tokenURL);
 }
 
-if (!in_array($_SERVER['REQUEST_METHOD'], array('HEAD', 'GET')))
-  REST::fatal(REST::HTTP_METHOD_NOT_ALLOWED);
 
-$poolCondition = '';
-if (!empty($TOPOS_POOL))
-  $poolCondition = 'AND `poolName` = ' .
-    Topos::escape_string( $TOPOS_POOL );
-elseif (!empty($_GET['pool']))
-  $poolCondition = 'AND `poolName` LIKE ' .
-    Topos::escape_string( str_replace(
-      array('%',   '_',   '*'),
-      array('\\%', '\\_', '%'),
-      $_GET['pool']
-    ));
+REST::require_method('HEAD', 'GET');
+
+
+//$poolCondition = '';
+//if (!empty($TOPOS_POOL))
+//  $poolCondition = 'AND `poolName` = ' .
+//    Topos::escape_string( $TOPOS_POOL );
+//elseif (!empty($_GET['pool']))
+//  $poolCondition = 'AND `poolName` LIKE ' .
+//    Topos::escape_string( str_replace(
+//      array('%',   '_',   '*'),
+//      array('\\%', '\\_', '%'),
+//      $_GET['pool']
+//    ));
+
 //  try {
 //    $result = Topos::query(<<<EOS
 //SELECT COUNT(*) FROM `Pools`
@@ -152,29 +143,66 @@ elseif (!empty($_GET['pool']))
 //    REST::fatal(REST::HTTP_NOT_FOUND, 'No matching token pools');
 //  }
 
-$tokenCondition = empty($_GET['token']) ? '' :
-  'AND `tokenValue` LIKE ' .
-    Topos::escape_string( str_replace(
-      array('%',   '_',   '*'),
-      array('\\%', '\\_', '%'),
-      $_GET['token']
-    ));
+// TODO onderstaand blok verder uitwerken.
+//if (!empty($_GET['regexp'])) {
+//  $regexp = $_GET['regexp'];
+//  $loop = true;
+//  while ($loop) {
+//    try {
+//      // start transaction
+//      // insert into RegExp on duplicate update
+//      // $last_insert_id set?
+//      if (true) {
+//        // Insert gelukt, dus regexp uitvoeren
+//        // 
+//        // INSERT INTO `Matches`
+//        // SELECT $last_insert_id, `tokenId`
+//        // FROM `Tokens` STRAIGHT JOIN `TokenValues`
+//        // WHERE `poolId` = $poolId AND `tokenValue` REGEXP $regexp;
+//      } else {
+//        // Insert mislukt dus regexp ophalen
+//        // SELECT `regexpId` FROM `RegExp` WHERE ...
+//      }
+//    }
+//    catch (Topos_Retry $e) {
+//      Topos::mysqli()->rollback();
+//      continue;
+//    }
+//    $loop = false;
+//  }
+//}
+
+$tokenCondition = '';
+if (isset($_GET['token'])) {
+  $tokenCondition = 'AND `tokenName` LIKE ' .
+    Topos::escape_string(
+      str_replace(
+        array('%',   '_',   '*'),
+        array('\\%', '\\_', '%'),
+        $_GET['token']
+      )
+    );
+}
 
 $loopflag = 1;
 while ($loopflag) {
   Topos::real_query('START TRANSACTION;');
   try {
     $result = Topos::query(<<<EOS
-SELECT `Tokens`.`tokenId`, `poolName`, `Tokens`.`tokenLeases`
+SELECT `Tokens`.`tokenId`, `Tokens`.`tokenLeases`
 FROM `Pools` STRAIGHT_JOIN `Tokens` ON `Pools`.`poolId` = `Tokens`.`poolId`
-WHERE `realmName` = {$escRealm}
-  {$poolCondition} {$tokenCondition}
+WHERE `poolName` = {$escPool}
+  {$tokenCondition}
   AND `Tokens`.`tokenLockTimeout` <= UNIX_TIMESTAMP()
-ORDER BY 3,1
+ORDER BY 2,1
 LIMIT 1
 FOR UPDATE;
 EOS
     );
+    if (!($row = $result->fetch_row())) {
+      Topos::mysqli()->rollback();
+      REST::fatal(REST::HTTP_NOT_FOUND, 'No token available');
+    }
     $loopflag = 0;
   }
   catch (Topos_Retry $e) {
@@ -184,11 +212,6 @@ EOS
 } // while
 
 try {
-  if (!($row = $result->fetch_row())) {
-    Topos::mysqli()->rollback();
-    REST::fatal(REST::HTTP_NOT_FOUND, 'No token available');
-  }
-
   $lockUUID = '';
   if ( empty($_GET['timeout']) ||
        (int)($_GET['timeout']) < 1 ) {
@@ -197,29 +220,21 @@ UPDATE `Tokens` SET `tokenLeases` = `tokenLeases` + 1
 WHERE `tokenId` = {$row[0]};
 EOS
     );
-    Topos::log('lease', array(
-      'realmName' => $TOPOS_REALM,
-      'poolName' => $row[1],
-      'tokenId' => $row[0],
-    ));
   } else {
     $lockUUID = Topos::uuid();
     $timeout = (int)($_GET['timeout']);
+    $description = isset($_GET['description'])
+      ? $_GET['description'] : '';
+    $description = Topos::escape_string($description);
     Topos::real_query(<<<EOS
 UPDATE `Tokens`
 SET `tokenLeases` = `tokenLeases` + 1,
     `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout},
-    `tokenLockUUID` = '{$lockUUID}'
+    `tokenLockUUID` = '{$lockUUID}',
+    `tokenLockDescription` = {$description}
 WHERE `tokenId` = {$row[0]};
 EOS
     );
-    Topos::log('lease', array(
-      'realmName' => $TOPOS_REALM,
-      'poolName' => $row[1],
-      'tokenId' => $row[0],
-      'timeout' => $timeout,
-      'UUID' => $lockUUID,
-    ));
   }
 } // try
 catch (Topos_MySQL $e) {
@@ -233,32 +248,12 @@ if (!Topos::mysqli()->commit())
     'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
   );
 
-$url = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
-    '/pools/' . REST::urlencode($row[1]) . '/tokens/' . $row[0];
-$type = REST::best_content_type(
-  array(
-    'text/plain' => 1.0,
-    REST::best_xhtml_type() => 1.0,
-  ), REST::best_xhtml_type()
-);
-$headers = array(
-  'status' => 'SEE_OTHER',
-  'Location' => $url,
-  'Content-Type' => $type . '; charset=UTF-8'
-);
-if ($lockUUID) {
-  $headers['Topos-OpaqueLockToken'] = "opaquelocktoken:$lockUUID";
-  $headers['Topos-LockURL'] = Topos::urlbase() . 'realms/' . REST::urlencode($TOPOS_REALM) .
-    '/locks/' . $lockUUID;
-}
-REST::header($headers);
-if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-switch ($type) {
-  case 'text/plain':
-    echo $url;
-    break;
-  default:
-    Topos::html_start('Leased token redirect');
-    echo "<p><a href=\"$url\">$row[0]</a></p>";
-    Topos::html_end();
-}
+$url = Topos::urlbase() . 'pools/' . REST::urlencode($TOPOS_POOL) .
+  '/tokens/' . $row[0];
+
+header( "X-Topos-OpaqueLockToken: opaquelocktoken:$lockUUID" );
+header( 'X-Topos-LockURL: ' . Topos::urlbase() . 'pools/' .
+        REST::urlencode($TOPOS_POOL) .
+        '/locks/' . $lockUUID );
+REST::redirect(REST::HTTP_SEE_OTHER, $url);
+
