@@ -24,15 +24,39 @@ $escPool = Topos::escape_string($TOPOS_POOL);
 // Handle the creation of a number of tokens, set by the user.
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
      strpos( @$_SERVER['CONTENT_TYPE'], 'application/x-www-form-urlencoded' ) === 0 ) {
-  if ( empty($_POST['tokens']) )
+  if ( !is_string(@$_POST['tokens']) )
     REST::fatal(REST::HTTP_BAD_REQUEST, 'Missing required parameter "tokens"');
-  $tokens = (int)($_POST['tokens']);
-  if ( !$tokens || $tokens > 1000000 )
-    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens"');
-  Topos::real_query(
-    "CALL `createTokens`({$escPool}, {$tokens});"
-  );
-  REST::fatal(REST::HTTP_ACCEPTED);
+  $tokens = preg_split('/[^\\d]+/', $_POST['tokens'], -1, PREG_SPLIT_NO_EMPTY);
+//  if (empty($tokens))
+//    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (1)');
+  if ( !empty($_POST['pool']) ) {
+    $tgtPool = Topos::poolId($TOPOS_POOL);
+    $srcPool = Topos::poolId($_POST['pool']);
+    $tokenIds = count($tokens)
+      ? 'AND `tokenId` IN (' . implode(',', $tokens) . ')'
+      : '';
+    Topos::real_query(<<<EOS
+UPDATE `Tokens`
+SET `poolId` = $tgtPool
+WHERE `poolId` = $srcPool
+      $tokenIds;
+EOS
+    );
+    REST::fatal(
+      REST::HTTP_OK,
+      Topos::mysqli()->affected_rows . ' tokens moved'
+    );
+  } elseif ( count($tokens) == 1 ) {
+    $tokens = $tokens[0];
+    if ( !$tokens || $tokens > 1000000 )
+      REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (2)');
+    Topos::real_query(
+      "CALL `createTokens`({$escPool}, {$tokens});"
+    );
+    REST::fatal(REST::HTTP_ACCEPTED);
+  } else {
+    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (3)');
+  }
 }
 
 // Handle upload of multiple tokens in a multipart/form-data request body:
@@ -123,8 +147,15 @@ EOS;
 REST::require_method('HEAD', 'GET');
 
 $query = <<<EOS
-SELECT `tokenId`, `tokenLength`, `tokenType`, `tokenName`, `tokenLockUUID`,
-       `tokenLockTimeout` - UNIX_TIMESTAMP()
+SELECT `tokenId`,
+       `tokenLength`,
+       `tokenType`,
+       `tokenName`,
+       `tokenLockUUID`,
+       `tokenLockTimeout` - UNIX_TIMESTAMP(),
+       `tokenLockDescription`,
+       `tokenLeases`,
+       `tokenCreated`
 FROM `Pools` NATURAL JOIN `Tokens`
 WHERE `poolName`  = {$escPool}
 ORDER BY 1;
@@ -137,6 +168,12 @@ $form = <<<EOS
 <form action="./" method="post">
 # tokens: <input type="text" name="tokens"/>
 <input type="submit" value="Populate"/>
+</form>
+<h3>Move tokens to this pool</h3>
+<form action="./" method="post">
+<p>Source pool:<input type="text" name="pool"/><br/>
+Token IDs: <input type="text" name="tokens"/> (IDs separated by anything)<br/>
+<input type="submit" value="Move"/></p>
 </form>
 <h3>Create tokens</h3>
 <form action="./" method="post" enctype="multipart/form-data">
@@ -151,19 +188,23 @@ header('X-Token-Count: ' . $result->num_rows);
 
 while ($row = $result->fetch_row())
   $directory->line(
-    $row[0], array( 'Size' => $row[1] . ' B',
-                    'Content-Type' => $row[2],
-                    'Original Name' => $row[3],
-                    'LockTokenHTML' => ($row[5] > 0 ? "<a href=\"../locks/{$row[4]}\">{$row[4]}</a>" : ''),
-                    'Timeout' => (
-                      $row[5] > 0
-                      ? sprintf( '%02d:%02d:%02d s',
-                                 ($row[5] / 3600),
-                                 ($row[5] / 60 % 60),
-                                 ($row[5] % 60)
-                        )
-                      : ''
-                    ),
+    $row[0], array(
+      'Size' => $row[1] . ' B',
+      'Content-Type' => $row[2],
+      'Original Name' => $row[3],
+      'LockTokenHTML' => ($row[5] > 0 ? "<a href=\"../locks/{$row[4]}\">{$row[4]}</a>" : ''),
+      'Timeout' => (
+        $row[5] > 0
+        ? sprintf( '%d:%02d:%02d',
+                   ($row[5] / 3600),
+                   ($row[5] / 60 % 60),
+                   ($row[5] % 60)
+          )
+        : ''
+      ),
+      'Created' => Topos::sortable_date( $row[8] ),
+      'Leases' => $row[7],
+      'LockDescription' => ($row[5] > 0 ? $row[6] : ''),
     )
   );
 $directory->end();

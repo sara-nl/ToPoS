@@ -26,8 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   while ($retries) {
     try {
       $query = <<<EOS
-DELETE `Tokens`.* FROM `Tokens` NATURAL JOIN `Pools`
-WHERE `tokenId` = {$TOPOS_TOKEN}
+DELETE `Tokens`, `TokenValues`
+FROM `Tokens` NATURAL JOIN `Pools` NATURAL JOIN `TokenValues`
+WHERE `Tokens`.`tokenId` = {$TOPOS_TOKEN}
   AND `poolName` = {$escPool};
 EOS;
       Topos::real_query($query);

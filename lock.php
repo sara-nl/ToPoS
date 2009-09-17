@@ -61,7 +61,10 @@ EOS
 }
 
 $result = Topos::query(<<<EOS
-SELECT `tokenId`, `tokenLockTimeout` - UNIX_TIMESTAMP(), `tokenLockDescription`
+SELECT `tokenId`,
+       `tokenName`,
+       `tokenLockTimeout` - UNIX_TIMESTAMP(),
+       `tokenLockDescription`
 FROM `Pools` NATURAL JOIN `Tokens`
 WHERE `tokenLockUUID` = $escLockUUID
   AND `tokenLockTimeout` > UNIX_TIMESTAMP();
@@ -86,9 +89,10 @@ if ($bct === 'text/plain') {
   if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
   echo <<<EOS
 TokenId: {$row[0]}
+TokenName: {$row[1]}
 TokenURL: $tokenURL
-Timeout: {$row[1]}
-Description: {$row[2]}
+Timeout: {$row[2]}
+Description: {$row[3]}
 EOS;
   exit;
 }
@@ -99,17 +103,14 @@ REST::header(array(
 ));
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
 echo REST::html_start('Lock info');
-?><h2>Delete</h2>
-<form action="<?php echo $TOPOS_TOKEN; ?>?http_method=DELETE" method="post">
-<input type="submit" value="Delete this lock"/>
-</form>
-<h2>Lock info</h2>
+?><h2>Lock info</h2>
 <table class="lockinfo"><tbody>
 <tr><th>TokenId:</th><td id="tokenId"><?php echo htmlentities($row[0]); ?></td></tr>
+<tr><th>TokenName:</th><td id="tokenName"><?php echo htmlentities($row[1]); ?></td></tr>
 <tr><th>TokenURL:</th><td id="tokenURL"><a href="<?php
   echo htmlspecialchars($tokenURL, ENT_QUOTES, 'UTF-8');
 ?>"><?php echo htmlspecialchars($tokenURL, ENT_QUOTES, 'UTF-8'); ?></a></td></tr>
-<tr><th>Timeout:</th><td id="timeout"><?php echo htmlentities($row[1], ENT_QUOTES, 'UTF-8'); ?></td></tr>
-<tr><th>Description:</th><td id="description"><?php echo htmlentities($row[2], ENT_QUOTES, 'UTF-8'); ?></td></tr>
+<tr><th>Timeout:</th><td id="timeout"><?php echo htmlentities($row[2], ENT_QUOTES, 'UTF-8'); ?></td></tr>
+<tr><th>Description:</th><td id="description"><?php echo htmlentities($row[3], ENT_QUOTES, 'UTF-8'); ?></td></tr>
 </tbody></table><?php
 echo REST::html_end();

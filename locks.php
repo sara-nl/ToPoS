@@ -24,7 +24,8 @@ $escPool = Topos::escape_string($TOPOS_POOL);
 REST::require_method('HEAD', 'GET');
 
 $result = Topos::query(<<<EOS
-SELECT `tokenLockUUID`, `tokenLockDescription`
+SELECT `tokenId`, `tokenName`, `tokenLockUUID`,
+       `tokenLockTimeout` - UNIX_TIMESTAMP(), `tokenLockDescription`
 FROM `Pools` NATURAL JOIN `Tokens`
 WHERE `poolName` = {$escPool}
   AND `tokenLockTimeout` > UNIX_TIMESTAMP()
@@ -34,5 +35,20 @@ EOS
 
 $directory = RESTDir::factory();
 while ($row = $result->fetch_row())
-  $directory->line( $row[0], array( 'Description' => $row[1] ) );
+  $directory->line(
+    $row[2], array(
+      'Token name' => $row[1],
+      //'LockTokenHTML' => ($row[5] > 0 ? "<a href=\"../locks/{$row[4]}\">{$row[4]}</a>" : ''),
+      'Timeout' => (
+        $row[3] > 0
+        ? sprintf( '%d:%02d:%02d',
+                   ($row[3] / 3600),
+                   ($row[3] / 60 % 60),
+                   ($row[3] % 60)
+          )
+        : ''
+      ),
+      'LockDescription' => ($row[3] > 0 ? $row[4] : ''),
+    )
+  );
 $directory->end();

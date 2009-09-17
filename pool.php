@@ -25,7 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   Topos::real_query('START TRANSACTION;');
   try {
     $query = <<<EOS
-DELETE FROM `Pools`
+DELETE `Pools`, `Tokens`, `TokenValues`
+FROM `Pools` NATURAL LEFT JOIN `Tokens` NATURAL LEFT JOIN `TokenValues`
 WHERE `Pools`.`poolName` = {$escPool};
 EOS;
     Topos::real_query($query);

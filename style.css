@@ -44,3 +44,15 @@ table.progress td.done {
 #div_index {
   float: right;
 }
+
+table.lockinfo {
+  border-collapse: collapse;
+  empty-cells: show;
+}
+table.lockinfo th {
+  text-align: left;
+}
+table.lockinfo td,
+table.lockinfo th {
+  border: 1px solid #ccc;
+}

@@ -37,8 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
       preg_match('/\\d+$/', $_GET['delete'], $matches);
       $delete = (int)($matches[0]);
       Topos::real_query(<<<EOS
-DELETE `Tokens`.* FROM `Tokens` NATURAL JOIN `Pools`
-WHERE `tokenId` = $delete
+DELETE `Tokens`, `TokenValues`
+FROM `Tokens` NATURAL JOIN `Pools` NATURAL JOIN `TokenValues` 
+WHERE `Tokens`.`tokenId` = $delete
   AND `poolName` = {$escPool};
 EOS
       );
