@@ -22,24 +22,28 @@ require_once('include/global.php');
 $escPool = Topos::escape_string($TOPOS_POOL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-  Topos::real_query('START TRANSACTION;');
-  try {
-    $query = <<<EOS
-DELETE `Pools`, `Tokens`, `TokenValues`
-FROM `Pools` NATURAL LEFT JOIN `Tokens` NATURAL LEFT JOIN `TokenValues`
+//  Topos::real_query('START TRANSACTION;');
+  Topos::real_query(<<<EOS
+DELETE `Pools`, `Tokens`
+FROM `Pools` NATURAL LEFT JOIN `Tokens`
 WHERE `Pools`.`poolName` = {$escPool};
-EOS;
-    Topos::real_query($query);
+EOS
+  );
+  $loopCount = 1;
+  while ($loopCount) {
+    try {
+      Topos::real_query(<<<EOS
+DELETE `TokenValues`
+FROM `TokenValues` NATURAL LEFT JOIN `Tokens`
+WHERE `Tokens`.`tokenId` IS NULL;
+EOS
+      );
+      $loopCount = 0;
+    }
+    catch (Topos_Retry $e) {
+      $loopCount++;
+    }
   }
-  catch (Topos_MySQL $e) {
-    Topos::mysqli()->rollback();
-    throw $e;
-  }
-  if (!Topos::mysqli()->commit())
-    REST::fatal(
-      REST::HTTP_SERVICE_UNAVAILABLE,
-      'Transaction failed: ' . htmlentities( Topos::mysqli()->error )
-    );
   REST::header(array(
     'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
   ));
@@ -87,5 +91,6 @@ $directory = RESTDir::factory(
 $directory->line('tokens/', array('Size' => (int)$ntokens . ' tokens'));
 $directory->line('locks/', array('Size' => (int)$nlocks . ' locks'));
 $directory->line('nextToken');
+$directory->line('tarball', array('Description' => 'all tokens in a single file'));
 $directory->line('progress', array('Description' => 'a progress bar'));
 $directory->end();

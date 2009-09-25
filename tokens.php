@@ -20,6 +20,7 @@
 require_once('include/global.php');
 
 $escPool = Topos::escape_string($TOPOS_POOL);
+$poolId = Topos::poolId($TOPOS_POOL);
 
 // Handle the creation of a number of tokens, set by the user.
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
@@ -30,7 +31,7 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
 //  if (empty($tokens))
 //    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (1)');
   if ( !empty($_POST['pool']) ) {
-    $tgtPool = Topos::poolId($TOPOS_POOL);
+    $tgtPool = $poolId;
     $srcPool = Topos::poolId($_POST['pool']);
     $tokenIds = count($tokens)
       ? 'AND `tokenId` IN (' . implode(',', $tokens) . ')'
@@ -64,71 +65,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Check if we have the right mime type:
   if ( strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) !== 0 )
     REST::fatal(REST::HTTP_UNSUPPORTED_MEDIA_TYPE);
-  // For this operation, we need MySQL transactions.
-  Topos::real_query('START TRANSACTION;');
-  try {
-    Topos::real_query('SET foreign_key_checks = 0;');
-    $t_upload_map = array();
-    if (!empty($_FILES)) {
-      $poolId = Topos::poolId($TOPOS_POOL);
-      $query1 = <<<EOS
+  if (empty($_FILES))
+    REST::fatal(REST::HTTP_BAD_REQUEST, "Nothing to process");
+  $stmt1 = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `TokenValues` (
   `tokenValue`
 ) VALUES (?);
-EOS;
-      $query2 = <<<EOS
+EOS
+  );
+  $stmt2 = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `Tokens` (
   `tokenId`, `poolId`, `tokenName`, `tokenType`, `tokenLength`, `tokenCreated`
 ) VALUES (?, {$poolId}, ?, ?, ?, UNIX_TIMESTAMP());
-EOS;
-      $stmt1 = Topos::mysqli()->prepare($query1);
-      $stmt2 = Topos::mysqli()->prepare($query2);
-      $bindTokenValue = $bindTokenId = $bindTokenType = $bindTokenLength = $bindTokenName = null;
-      $stmt1->bind_param("b", $bindTokenValue);
-      $stmt2->bind_param("issi", $bindTokenId, $bindTokenName, $bindTokenType, $bindTokenLength);
-      foreach ($_FILES as $paramname => $file) {
-        if (!is_array( $file['error'] ) ) {
-          $file['name'    ] = array( $file['name'    ] );
-          $file['error'   ] = array( $file['error'   ] );
-          $file['type'    ] = array( $file['type'    ] );
-          $file['tmp_name'] = array( $file['tmp_name'] );
-          $file['size'    ] = array( $file['size'    ] );
-        }
-        foreach ( $file['name'] as $key => $filename ) {
-          if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
-            continue;
-          if ( $file['error'][$key] !== UPLOAD_ERR_OK )
-            REST::fatal(
-              REST::HTTP_BAD_REQUEST,
-              "Errno {$file['error'][$key]} occured during file upload."
-            );
-          $stream = fopen( $file['tmp_name'][$key], 'r' );
-          while ( !feof($stream) )
-            $stmt1->send_long_data( 0, fread( $stream, 8192 ) );
-          fclose($stream);
-          if ( !$stmt1->execute() ) {
-            Topos::mysqli()->rollback();
-            REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, 'X' .$stmt1->error);
-          }
-          $bindTokenId = $stmt1->insert_id;
-          
+EOS
+  );
+  $bindTokenValue = $bindTokenId = $bindTokenType = $bindTokenLength = $bindTokenName = null;
+  $stmt1->bind_param("b", $bindTokenValue);
+  $stmt2->bind_param("issi", $bindTokenId, $bindTokenName, $bindTokenType, $bindTokenLength);
+  $t_upload_map = array();
+  foreach ($_FILES as $paramname => $file) {
+    if (!is_array( $file['error'] ) ) {
+      $file['name'    ] = array( $file['name'    ] );
+      $file['error'   ] = array( $file['error'   ] );
+      $file['type'    ] = array( $file['type'    ] );
+      $file['tmp_name'] = array( $file['tmp_name'] );
+      $file['size'    ] = array( $file['size'    ] );
+    }
+    foreach ( $file['name'] as $key => $filename ) {
+      if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
+        continue;
+      if ( $file['error'][$key] !== UPLOAD_ERR_OK )
+        REST::fatal(
+          REST::HTTP_BAD_REQUEST,
+          "Errno {$file['error'][$key]} occured during file upload."
+        );
+      $stream = fopen( $file['tmp_name'][$key], 'r' );
+      while ( !feof($stream) )
+        $stmt1->send_long_data( 0, fread( $stream, 8192 ) );
+      fclose($stream);
+      if ( !$stmt1->execute() )
+        REST::fatal(
+          REST::HTTP_INTERNAL_SERVER_ERROR,
+          'stmt1: ' . $stmt1->error
+        );
+      $t_upload_map[$paramname][$key] = $stmt1->insert_id;
+    } // foreach ( $file['name'] as $key => $filename )
+  } // foreach ($_FILES as $paramname => $file)
+  // For this operation, we need MySQL transactions.
+  Topos::real_query('START TRANSACTION;');
+  try {
+    foreach ($_FILES as $paramname => $file) {
+      foreach ( $file['name'] as $key => $filename ) {
+        if (isset($t_upload_map[$paramname][$key])) {
+          $bindTokenId = $t_upload_map[$paramname][$key];
           $bindTokenName = empty($filename) ? '' : $filename;
           $bindTokenType = empty($file['type'][$key])
             ? 'application/octet-stream' : $file['type'][$key];
           $bindTokenLength = $file['size'][$key];
           if ( !$stmt2->execute() ) {
             Topos::mysqli()->rollback();
-            REST::fatal(REST::HTTP_INTERNAL_SERVER_ERROR, 'Y'.$stmt2->error);
-          }
-//          $t_upload_map[$stmt1->insert_id] = array(
-//            'Original Name' => $bindTokenName,
-//            'Content-Type' => $bindTokenType,
-//            'Content-Length' => $bindTokenLength
-//          );
-        } // foreach()
-      } // foreach()
-    } // if()
-    Topos::real_query('SET foreign_key_checks = 1;');
+            REST::fatal(
+              REST::HTTP_INTERNAL_SERVER_ERROR,
+              'stmt2: ' . $stmt2->error
+            );
+          } // if ( !$stmt2->execute() )
+        } // if (isset($t_upload_map[$paramname][$key]))
+      } // foreach ( $file['name'] as $key => $filename )
+    } // foreach ($_FILES as $paramname => $file)
   } // try
   catch (Topos_MySQL $e) {
     Topos::mysqli()->rollback();
@@ -156,8 +159,8 @@ SELECT `tokenId`,
        `tokenLockDescription`,
        `tokenLeases`,
        `tokenCreated`
-FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `poolName`  = {$escPool}
+FROM `Tokens`
+WHERE `poolId`  = {$poolId}
 ORDER BY 1;
 EOS;
 $result = Topos::query($query);

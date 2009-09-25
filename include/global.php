@@ -115,10 +115,38 @@ public static function escape_string($string) {
 }
 
 
-public static function poolId($poolName) {
+public static function poolId2($poolName) {
   $escPoolName = self::escape_string($poolName);
   $result = self::query("SELECT getPoolId($escPoolName);");
   $row = $result->fetch_row();
+  return $row[0];
+}
+
+
+public static function poolId($poolName) {
+  $escPoolName = self::escape_string($poolName);
+  $result = self::query("SELECT `poolId` FROM `Pools` WHERE `poolName` = $escPoolName;");
+  if (( $row = $result->fetch_row()))
+    return $row[0];
+  $result = self::query("SELECT getPoolId($escPoolName);");
+  $row = $result->fetch_row();
+  return $row[0];
+}
+
+
+public static function poolId3($poolName) {
+  $escPoolName = self::escape_string($poolName);
+  $loopflag = 1;
+  while ($loopflag) {
+    try {
+      $result = Topos::query("SELECT getPoolId($escPoolName);");
+      $row = $result->fetch_row();
+      $loopflag = 0;
+    }
+    catch (Topos_Retry $e) {
+      $loopflag++;
+    }
+  } // while
   return $row[0];
 }
 
@@ -158,20 +186,6 @@ public static function uuid() {
   $result = self::query('SELECT UUID();');
   $row = $result->fetch_row();
   return $row[0];
-}
-
-
-/**
- * Sends error code to client
- * @param $status string The status code to send to the client
- * @param $message string The message in the content body
- * @return void This function never returns.
- */
-public static function fatal($status, $message = '') {
-  $debug = fopen(dirname(__FILE__) . '/debug.txt', 'a');
-  fwrite($debug, "\n\n{$status} {$message}\n" . var_export($_SERVER, true));
-  fclose($debug);
-  return REST::fatal($status, $message);
 }
 
 

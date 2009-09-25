@@ -48,16 +48,25 @@ if ( !empty($_GET['timeout']) &&
   $description = isset($_GET['description'])
     ? ', `tokenLockDescription` = ' . Topos::escape_string($_GET['description'])
     : '';
-  Topos::real_query(<<<EOS
+  $loopflag = 1;
+  while ($loopflag) {
+    try {
+      Topos::real_query(<<<EOS
 UPDATE `Tokens`
 SET `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout}
     {$description}
 WHERE `tokenLockUUID` = {$escLockUUID}
   AND `tokenLockTimeout` > UNIX_TIMESTAMP();
 EOS
-  );
-  if (!Topos::mysqli()->affected_rows)
-    REST::fatal(REST::HTTP_NOT_FOUND);
+      );
+      if (!Topos::mysqli()->affected_rows)
+        REST::fatal(REST::HTTP_NOT_FOUND);
+      $loopflag = 0;
+    }
+    catch (Topos_Retry $e) {
+      $loopflag++;
+    }
+  } // while
 }
 
 $result = Topos::query(<<<EOS
