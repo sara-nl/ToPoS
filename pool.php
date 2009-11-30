@@ -29,21 +29,29 @@ FROM `Pools` NATURAL LEFT JOIN `Tokens`
 WHERE `Pools`.`poolName` = {$escPool};
 EOS
   );
-  $loopCount = 1;
-  while ($loopCount) {
-    try {
-      Topos::real_query(<<<EOS
-DELETE `TokenValues`
-FROM `TokenValues` NATURAL LEFT JOIN `Tokens`
-WHERE `Tokens`.`tokenId` IS NULL;
+  Topos::real_query(<<<EOS
+CREATE TEMPORARY TABLE `OrphanValues` (
+  `tokenId` bigint(20) unsigned NOT NULL,
+  PRIMARY KEY  (`tokenId`)
+) ENGINE=MyISAM;
 EOS
-      );
-      $loopCount = 0;
-    }
-    catch (Topos_Retry $e) {
-      $loopCount++;
-    }
-  }
+  );
+  Topos::real_query(<<<EOS
+INSERT INTO `OrphanValues`
+SELECT `TV`.`tokenId`
+FROM `TokenValues` AS `TV` NATURAL LEFT JOIN `Tokens` AS `T`
+WHERE `T`.`tokenId` IS NULL;
+EOS
+  );
+  Topos::real_query(<<<EOS
+DELETE `TokenValues`
+FROM `OrphanValues` NATURAL JOIN `TokenValues`;
+EOS
+  );
+  Topos::real_query(<<<EOS
+DROP TABLE `OrphanValues`;
+EOS
+  );
   REST::header(array(
     'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
   ));
@@ -91,6 +99,6 @@ $directory = RESTDir::factory(
 $directory->line('tokens/', array('Size' => (int)$ntokens . ' tokens'));
 $directory->line('locks/', array('Size' => (int)$nlocks . ' locks'));
 $directory->line('nextToken');
-$directory->line('tarball', array('Description' => 'all tokens in a single file'));
+#$directory->line('tarball', array('Description' => 'all tokens in a single file'));
 $directory->line('progress', array('Description' => 'a progress bar'));
 $directory->end();
