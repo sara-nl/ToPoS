@@ -60,6 +60,101 @@ EOS
   }
 }
 
+// Handle a upload for files of which each line will be a token, and content-type multipart/form-data
+// TODO: Dit is gedaan door Evert. Ik ben er nog niet helemaal tevreden over
+// geloof ik. De code is bijna 100% redundant. Eigenlijk had ik de nieuwe 
+// functie liever geintegreerd gezien met de bestaande upload-faciliteit.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_GET['perline'] ) && strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) === 0) {
+  if (empty($_FILES))
+    REST::fatal(REST::HTTP_BAD_REQUEST, "Nothing to process");
+  $stmt1 = Topos::mysqli()->prepare(<<<EOS
+INSERT INTO `TokenValues` (
+  `tokenValue`
+) VALUES (?);
+EOS
+  );
+  $stmt2 = Topos::mysqli()->prepare(<<<EOS
+INSERT INTO `Tokens` (
+  `tokenId`, `poolId`, `tokenName`, `tokenType`, `tokenLength`, `tokenCreated`
+) VALUES (?, {$poolId}, ?, ?, ?, UNIX_TIMESTAMP());
+EOS
+  );
+  $bindTokenValue = $bindTokenId = $bindTokenType = $bindTokenLength = $bindTokenName = null;
+  $stmt1->bind_param("s", $bindTokenValue);
+  $stmt2->bind_param("issi", $bindTokenId, $bindTokenName, $bindTokenType, $bindTokenLength);
+  $t_upload_map = array();
+  foreach ($_FILES as $paramname => $file) {
+    if (!is_array( $file['error'] ) ) {
+      $file['name'    ] = array( $file['name'    ] );
+      $file['error'   ] = array( $file['error'   ] );
+      $file['type'    ] = array( $file['type'    ] );
+      $file['tmp_name'] = array( $file['tmp_name'] );
+      $file['size'    ] = array( $file['size'    ] );
+    }
+    foreach ( $file['name'] as $key => $filename ) {
+      if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
+        continue;
+      if ( $file['error'][$key] !== UPLOAD_ERR_OK )
+        REST::fatal(
+          REST::HTTP_BAD_REQUEST,
+          "Errno {$file['error'][$key]} occured during file upload."
+        );
+      $stream = fopen( $file['tmp_name'][$key], 'r' );
+      while (!feof($stream)) {
+        $bindTokenValue = fgets($stream);
+        if ( !$stmt1->execute() )
+          REST::fatal(
+            REST::HTTP_INTERNAL_SERVER_ERROR,
+            'stmt1: ' . $stmt1->error
+          );
+        $t_upload_map[$paramname][$key][] = array('id' => $stmt1->insert_id, 'size' => strlen($bindTokenValue));
+      }
+    }
+  }
+  // For this operation, we need MySQL transactions.
+  Topos::real_query('START TRANSACTION;');
+  try {
+    foreach ($_FILES as $paramname => $file) {
+      if (!is_array( $file['error'] ) ) {
+        $file['name'    ] = array( $file['name'    ] );
+        $file['error'   ] = array( $file['error'   ] );
+        $file['type'    ] = array( $file['type'    ] );
+        $file['tmp_name'] = array( $file['tmp_name'] );
+        $file['size'    ] = array( $file['size'    ] );
+      }
+      foreach ( $file['name'] as $key => $filename ) {
+        if ( !empty($t_upload_map[$paramname][$key]) ) {
+          $bindTokenName = empty($filename) ? '' : $filename;
+          $bindTokenType = empty($file['type'][$key])
+            ? 'application/octet-stream' : $file['type'][$key];
+          foreach ( $t_upload_map[$paramname][$key] as $tokenData) {
+            $bindTokenId = $tokenData['id'];
+            $bindTokenLength = $tokenData['size'];
+            if ( !$stmt2->execute() ) {
+              Topos::mysqli()->rollback();
+              REST::fatal(
+                REST::HTTP_INTERNAL_SERVER_ERROR,
+                'stmt2: ' . $stmt2->error
+              );
+            } // if ( !$stmt2->execute() )
+          }
+        }
+      } // foreach ( $file['name'] as $key => $filename )
+    } // foreach ($_FILES as $paramname => $file)
+  } // try
+  catch (Topos_MySQL $e) {
+    Topos::mysqli()->rollback();
+    throw $e;
+  }
+  if (!Topos::mysqli()->commit())
+    REST::fatal(
+      REST::HTTP_SERVICE_UNAVAILABLE,
+      'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
+    );
+
+  REST::fatal(REST::HTTP_ACCEPTED);
+}
+
 // Handle upload of multiple tokens in a multipart/form-data request body:
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Check if we have the right mime type:
@@ -67,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     REST::fatal(REST::HTTP_UNSUPPORTED_MEDIA_TYPE);
   if (empty($_FILES))
     REST::fatal(REST::HTTP_BAD_REQUEST, "Nothing to process");
+  
   $stmt1 = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `TokenValues` (
   `tokenValue`
@@ -184,6 +280,11 @@ Token IDs: <input type="text" name="tokens"/> (IDs separated by anything)<br/>
 <input type="file" name="create[]" /> File 2<br />
 <input type="file" name="create[]" /> File <i>n</i><br />
 <input type="submit" value="Post file(s)" />
+</form>
+<h3>Create tokens from each line in a file</h3>
+<form action="./?perline" method="post" enctype="multipart/form-data">
+<input type="file" name="create" /> File<br />
+<input type="submit" value="Post file" />
 </form>
 EOS;
 $directory = RESTDir::factory('Tokens')->setForm($form);
