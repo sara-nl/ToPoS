@@ -21,6 +21,24 @@ require_once('include/global.php');
 
 $escPool = Topos::escape_string($TOPOS_POOL);
 
+// TODO: the DELETE handler was written by Evert, using a subquery. I'm used
+// to doing this with a single JOIN query...
+if ($_SERVER['REQUEST_METHOD'] === 'DELETE') { 
+  Topos::real_query(<<<EOS
+UPDATE `Tokens`
+SET `tokenLockTimeout` = 0, `tokenLockUUID` = null
+WHERE `poolId` = (SELECT `poolId` FROM `Pools` WHERE `Pools`.`poolName` = {$escPool});
+EOS
+  ); 
+  REST::header(array(
+    'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
+  ));
+  echo REST::html_start('Locks'); 
+  echo '<p>Locks destroyed successfully.</p>';
+  echo REST::html_end(); 
+  exit;
+}
+
 REST::require_method('HEAD', 'GET');
 
 $result = Topos::query(<<<EOS
