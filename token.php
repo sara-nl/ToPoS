@@ -72,7 +72,7 @@ $headers = array(
   'Last-Modified' => REST::http_date($row[2]),
 );
 if (!empty($row[3]))
-  $headers['Content-Disposition'] = 'attachment; filename="' . $row[3] . '"';
+  $headers['Content-Disposition'] = 'inline; filename="' . $row[3] . '"';
   
 if ($row[4]) {
   $headers['X-Topos-OpaqueLockToken'] = "opaquelocktoken:{$row[4]}";
