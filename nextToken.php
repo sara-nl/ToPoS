@@ -131,12 +131,13 @@ ORDER BY 2,1;
 EOS
   );
   while ( ( $row = $result->fetch_row() ) ) {
+    $tokenId = $row[0]; $tokenLeases = $row[1];
     $lockUUID = '';
     if ( empty($_GET['timeout']) ||
          (int)($_GET['timeout']) < 1 ) {
       Topos::real_query(<<<EOS
-UPDATE `Tokens` SET `tokenLeases` = {$row[1]} + 1
-WHERE `tokenId` = {$row[0]} AND `tokenLeases` = {$row[1]};
+UPDATE `Tokens` SET `tokenLeases` = {$tokenLeases} + 1
+WHERE `tokenId` = {$tokenId} AND `tokenLeases` = {$tokenLeases};
 EOS
       );
     } else {
@@ -147,11 +148,11 @@ EOS
       $description = Topos::escape_string($description);
       Topos::real_query(<<<EOS
 UPDATE `Tokens`
-SET `tokenLeases` = {$row[1]} + 1,
+SET `tokenLeases` = {$tokenLeases} + 1,
     `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout},
     `tokenLockUUID` = '{$lockUUID}',
     `tokenLockDescription` = {$description}
-WHERE `tokenId` = {$row[0]} AND `tokenLeases` = {$row[1]};
+WHERE `tokenId` = {$tokenId} AND `tokenLeases` = {$tokenLeases};
 EOS
       );
     }
@@ -193,12 +194,13 @@ EOS
       );
     } // while
     while ( ( $row = $result->fetch_row() ) ) {
+      $tokenId = $row[0]; $tokenLeases = $row[1];
       $lockUUID = '';
       if ( empty($_GET['timeout']) ||
            (int)($_GET['timeout']) < 1 ) {
         Topos::real_query(<<<EOS
-UPDATE `Tokens` SET `tokenLeases` = {$row[1]} + 1
-WHERE `tokenId` = {$row[0]} AND `tokenLeases` = {$row[1]};
+UPDATE `Tokens` SET `tokenLeases` = {$tokenLeases} + 1
+WHERE `tokenId` = {$tokenId} AND `tokenLeases` = {$tokenLeases};
 EOS
         );
       } else {
@@ -209,11 +211,11 @@ EOS
         $description = Topos::escape_string($description);
         Topos::real_query(<<<EOS
 UPDATE `Tokens`
-SET `tokenLeases` = {$row[1]} + 1,
+SET `tokenLeases` = {$tokenLeases} + 1,
     `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout},
     `tokenLockUUID` = '{$lockUUID}',
     `tokenLockDescription` = {$description}
-WHERE `tokenId` = {$row[0]} AND `tokenLeases` = {$row[1]};
+WHERE `tokenId` = {$tokenId} AND `tokenLeases` = {$tokenLeases};
 EOS
         );
       }
