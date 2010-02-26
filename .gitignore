@@ -5,3 +5,4 @@
 
 # temporary backups:
 *.bak
+*[0-9].php
