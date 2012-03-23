@@ -18,14 +18,41 @@
  **************************************************************************/
 
 require_once(dirname(__FILE__) . '/REST/REST.php');
+require_once(dirname(__FILE__) . '/db_passwd.php');
 REST::handle_method_spoofing();
 REST::setHTML( array('Topos', 'html_start'), array('Topos', 'html_end') );
+
+#if (!isset($_SERVER['PHP_AUTH_USER'])) {
+#  header('WWW-Authenticate: Basic realm="ToPoS 4.1"');
+#  REST::fatal(
+#    REST::HTTP_UNAUTHORIZED,
+#    'Please login with your full name, using your e-mail address as the password.'
+#  );
+#}
+#if (!preg_match('/^[\\w.\\-]+@(?:[\\w\\-]+\\.)+[a-z]{1,4}$/i', $_SERVER['PHP_AUTH_PW'])) {
+#  header('WWW-Authenticate: Basic realm="ToPoS 4.1"');
+#  REST::fatal(
+#    REST::HTTP_UNAUTHORIZED,
+#    $_SERVER['PHP_AUTH_PW'] . ' is not a valid e-mail address.'
+#  );
+#}
 
 #require_once('rest.php');
 
 #$debug = fopen(dirname(__FILE__) . '/debug.txt', 'a');
 #fwrite($debug, "\n\n" . var_export($_SERVER, true));
 #fclose($debug);
+
+#$log = fopen(dirname(__FILE__) . '/log.txt', 'a');
+#fwrite(
+#  $log,
+#  REST::http_date(time()) . "\t" .
+#  addcslashes($_SERVER['PHP_AUTH_USER'], "\\\n\t") . "\t" .
+#  addcslashes($_SERVER['PHP_AUTH_PW'], "\\\n\t") . "\t" .
+#  $_SERVER['REQUEST_METHOD'] . "\t" . 
+#  $_SERVER['SCRIPT_FILENAME'] . "\n"
+#);
+#fclose($log);
 
 //session_name('aanwezigheidsbord');
 //session_set_cookie_params( 0, dirname($_SERVER['SCRIPT_NAME']) );
@@ -57,6 +84,7 @@ if ( !empty($_SERVER['PATH_INFO']) &&
   $TOPOS_TOKEN = @$matches[2];
 }
 
+
 /**
  * A MySQL exception
  * @package Topos
@@ -64,13 +92,6 @@ if ( !empty($_SERVER['PATH_INFO']) &&
 class Topos_MySQL extends Exception {}
 
 
-/**
- * A temporary Exception: Try again.
- * @package Topos
- */
-class Topos_Retry extends Topos_MySQL {}
-
-  
 /**
  * Just a namespace.
  * @package Topos
@@ -94,15 +115,10 @@ private static $MYSQLI = null;
 public static function mysqli() {
   if (self::$MYSQLI === null) {
     self::$MYSQLI = new mysqli(
-      'localhost', 'topos', 'T49WpiQT', 'topos_4'
+      'localhost', 'topos', DB_PASSWD, 'topos_4_1'
     );
     if ( !self::$MYSQLI )
       throw new Topos_MySQL(mysqli_connect_error());
-//    self::$MYSQLI->real_query(
-//      'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;'
-//    );
-//    self::$MYSQLI->autocommit(false);
-//    self::$MYSQLI->commit();
   }
   return self::$MYSQLI;
 }
@@ -115,38 +131,10 @@ public static function escape_string($string) {
 }
 
 
-public static function poolId2($poolName) {
-  $escPoolName = self::escape_string($poolName);
-  $result = self::query("SELECT getPoolId($escPoolName);");
-  $row = $result->fetch_row();
-  return $row[0];
-}
-
-
 public static function poolId($poolName) {
   $escPoolName = self::escape_string($poolName);
-  $result = self::query("SELECT `poolId` FROM `Pools` WHERE `poolName` = $escPoolName;");
-  if (( $row = $result->fetch_row()))
-    return $row[0];
   $result = self::query("SELECT getPoolId($escPoolName);");
   $row = $result->fetch_row();
-  return $row[0];
-}
-
-
-public static function poolId3($poolName) {
-  $escPoolName = self::escape_string($poolName);
-  $loopflag = 1;
-  while ($loopflag) {
-    try {
-      $result = Topos::query("SELECT getPoolId($escPoolName);");
-      $row = $result->fetch_row();
-      $loopflag = 0;
-    }
-    catch (Topos_Retry $e) {
-      $loopflag++;
-    }
-  } // while
   return $row[0];
 }
 
@@ -157,12 +145,8 @@ public static function poolId3($poolName) {
  * @throws Exception
  */
 public static function real_query($query) {
-  if (! self::mysqli()->real_query($query)) {
-    if (self::mysqli()->errno == 1205 ||
-        self::mysqli()->errno == 1213)
-      throw new Topos_Retry( self::mysqli()->error );
+  if ( ! self::mysqli()->real_query($query) )
     throw new Topos_MySQL( self::mysqli()->error, self::mysqli()->errno );
-  }
 }
 
 
@@ -172,12 +156,8 @@ public static function real_query($query) {
  * @throws Exception
  */
 public static function query($query) {
-  if ( !( $retval = self::mysqli()->query($query) ) ) {
-    if (self::mysqli()->errno == 1205 ||
-        self::mysqli()->errno == 1213)
-      throw new Topos_Retry(self::mysqli()->error);
+  if ( !( $retval = self::mysqli()->query($query) ) )
     throw new Topos_MySQL( self::mysqli()->error, self::mysqli()->errno );
-  }
   return $retval;
 }
 
@@ -263,7 +243,7 @@ private static $URLBASE = null;
 public static function urlbase() {
   if ( is_null( self::$URLBASE ) ) {
     //DAV::debug('$_SERVER: ' . var_export($_SERVER, true));
-    self::$URLBASE = REST::urlbase() . '/4/';
+    self::$URLBASE = REST::urlbase() . '/4.1/';
   }
   return self::$URLBASE;
 }

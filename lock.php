@@ -17,6 +17,8 @@
  * $Id$
  **************************************************************************/
 
+//TODO
+
 require_once('include/global.php');
 
 $escLockUUID = Topos::escape_string($TOPOS_TOKEN);
@@ -28,45 +30,37 @@ SET `tokenLockTimeout` = 0, `tokenLockUUID` = null
 WHERE `tokenLockUUID` = {$escLockUUID};
 EOS
   );
-  if (Topos::mysqli()->affected_rows) {
-    REST::header(array(
-      'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
-    ));
-    echo REST::html_start('Lock destroyed');
-    echo '<p>Lock destroyed successfully.</p>';
-    echo REST::html_end();
-    exit;
-  } else {
-    REST::fatal(REST::HTTP_NOT_FOUND);
-  }
+  if (Topos::mysqli()->affected_rows)
+    REST::fatal(
+      REST::HTTP_OK,
+      'Lock destroyed successfully'
+    );
+  REST::fatal(REST::HTTP_NOT_FOUND);
 }
 
 REST::require_method('HEAD', 'GET');
 
-if ( !empty($_GET['timeout']) &&
-     ($timeout = (int)($_GET['timeout'])) > 0 ) {
-  $description = isset($_GET['description'])
-    ? ', `tokenLockDescription` = ' . Topos::escape_string($_GET['description'])
+if ( isset( $_GET['timeout'] ) ) {
+  $timeout = (int)($_GET['timeout']);
+  if ($timeout < 1)
+    REST::fatal(
+      REST::HTTP_BAD_REQUEST,
+      'Bad value for parameter "timeout"'
+    );
+  $description = isset($_GET['description']) ?
+    ', `tokenLockDescription` = ' . Topos::escape_string((string)($_GET['description']))
     : '';
-  $loopflag = 1;
-  while ($loopflag) {
-    try {
-      Topos::real_query(<<<EOS
+  Topos::real_query(<<<EOS
 UPDATE `Tokens`
-SET `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout}
+SET `tokenLockTimeout` = UNIX_TIMESTAMP() + {$timeout},
+    `tokenLockCounter` = `tokenLockCounter` + 1
     {$description}
 WHERE `tokenLockUUID` = {$escLockUUID}
   AND `tokenLockTimeout` > UNIX_TIMESTAMP();
 EOS
-      );
-      if (!Topos::mysqli()->affected_rows)
-        REST::fatal(REST::HTTP_NOT_FOUND);
-      $loopflag = 0;
-    }
-    catch (Topos_Retry $e) {
-      $loopflag++;
-    }
-  } // while
+  );
+  if (!Topos::mysqli()->affected_rows)
+    REST::fatal(REST::HTTP_NOT_FOUND);
 }
 
 $result = Topos::query(<<<EOS
@@ -74,7 +68,7 @@ SELECT `tokenId`,
        `tokenName`,
        `tokenLockTimeout` - UNIX_TIMESTAMP(),
        `tokenLockDescription`
-FROM `Pools` NATURAL JOIN `Tokens`
+FROM `Tokens`
 WHERE `tokenLockUUID` = $escLockUUID
   AND `tokenLockTimeout` > UNIX_TIMESTAMP();
 EOS

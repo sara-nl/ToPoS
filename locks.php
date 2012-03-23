@@ -19,7 +19,7 @@
 
 require_once('include/global.php');
 
-$escPool = Topos::escape_string($TOPOS_POOL);
+$poolId = Topos::poolId($TOPOS_POOL);
 
 // TODO: the DELETE handler was written by Evert, using a subquery. I'm used
 // to doing this with a single JOIN query...
@@ -27,16 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   Topos::real_query(<<<EOS
 UPDATE `Tokens`
 SET `tokenLockTimeout` = 0, `tokenLockUUID` = null
-WHERE `poolId` = (SELECT `poolId` FROM `Pools` WHERE `Pools`.`poolName` = {$escPool});
+WHERE `poolId` = {$poolId};
 EOS
   ); 
-  REST::header(array(
-    'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
-  ));
-  echo REST::html_start('Locks'); 
-  echo '<p>Locks destroyed successfully.</p>';
-  echo REST::html_end(); 
-  exit;
+  REST::fatal(REST::HTTP_OK, 'Locks destroyed successfully');
 }
 
 REST::require_method('HEAD', 'GET');
@@ -44,8 +38,8 @@ REST::require_method('HEAD', 'GET');
 $result = Topos::query(<<<EOS
 SELECT `tokenId`, `tokenName`, `tokenLockUUID`,
        `tokenLockTimeout` - UNIX_TIMESTAMP(), `tokenLockDescription`
-FROM `Pools` NATURAL JOIN `Tokens`
-WHERE `poolName` = {$escPool}
+FROM `Tokens`
+WHERE `poolId` = {$poolId}
   AND `tokenLockTimeout` > UNIX_TIMESTAMP()
 ORDER BY 1;
 EOS

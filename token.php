@@ -19,33 +19,20 @@
 
 require_once('include/global.php');
 
-$escPool = Topos::escape_string($TOPOS_POOL);
+$poolId = Topos::poolId($TOPOS_POOL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-  $retries = 1;
-  while ($retries) {
-    try {
-      $query = <<<EOS
-DELETE `Tokens`, `TokenValues`
-FROM `Tokens` NATURAL JOIN `Pools` NATURAL JOIN `TokenValues`
+  $query = <<<EOS
+DELETE FROM `Tokens`
 WHERE `Tokens`.`tokenId` = {$TOPOS_TOKEN}
-  AND `poolName` = {$escPool};
+  AND `poolId` = {$poolId};
 EOS;
-      Topos::real_query($query);
-      $retries = 0;
-    }
-    catch (Topos_Retry $e) {
-      $retries++;
-    }
-  }
+  Topos::real_query($query);
   if (Topos::mysqli()->affected_rows) {
-    REST::header(array(
-      'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
-    ));
-    echo REST::html_start('Token destroyed');
-    echo '<p>Token destroyed successfully.</p>';
-    echo REST::html_end();
-    exit;
+    REST::fatal(
+      REST::HTTP_OK,
+      'Token destroyed'
+    );
   } else {
     REST::fatal(REST::HTTP_NOT_FOUND);
   }
@@ -55,20 +42,28 @@ REST::require_method('HEAD', 'GET');
 if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
   REST::fatal(REST::HTTP_NOT_MODIFIED);
 
-$query = <<<EOS
-SELECT `tokenValue`, `tokenType`, `tokenCreated`, `tokenName`,
-       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(),`tokenLockUUID`,NULL)
-FROM `Pools` NATURAL JOIN `Tokens` NATURAL JOIN `TokenValues`
-WHERE `poolName`  = {$escPool}
-  AND `tokenId`   = {$TOPOS_TOKEN};
-EOS;
-$result = Topos::query($query);
+$poolId = Topos::poolId($TOPOS_POOL);
+$result = Topos::query(<<<EOS
+SELECT `tokenLength`, `tokenType`, `tokenCreated`, `tokenName`,
+       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(), `tokenLockUUID`, NULL)
+FROM `Tokens`
+WHERE `tokenId` = {$TOPOS_TOKEN}
+  AND `poolId`  = {$poolId};
+EOS
+);
 if (!($row = $result->fetch_row()))
   REST::fatal(REST::HTTP_NOT_FOUND);
+$result = Topos::query(<<<EOS
+SELECT `tokenValue` FROM `TokenValues`
+WHERE `tokenId` = {$TOPOS_TOKEN}
+EOS
+);
+$tokenValue = $result->fetch_row();
+$tokenValue = $tokenValue[0];
 
 $headers = array(
   'Content-Type' => $row[1],
-  'Content-Length' => strlen($row[0]),
+  'Content-Length' => $row[0],
   'Last-Modified' => REST::http_date($row[2]),
 );
 if (!empty($row[3]))
@@ -81,4 +76,4 @@ if ($row[4]) {
 }
 REST::header($headers);
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
-echo $row[0];
+echo $tokenValue;

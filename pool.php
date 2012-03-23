@@ -21,44 +21,18 @@ require_once('include/global.php');
 
 $escPool = Topos::escape_string($TOPOS_POOL);
 
+//Deprecated:
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-//  Topos::real_query('START TRANSACTION;');
   Topos::real_query(<<<EOS
 DELETE `Pools`, `Tokens`
 FROM `Pools` NATURAL LEFT JOIN `Tokens`
 WHERE `Pools`.`poolName` = {$escPool};
 EOS
   );
-  Topos::real_query(<<<EOS
-CREATE TEMPORARY TABLE `OrphanValues` (
-  `tokenId` bigint(20) unsigned NOT NULL,
-  PRIMARY KEY  (`tokenId`)
-) ENGINE=MyISAM;
-EOS
+  REST::fatal(
+    REST::HTTP_OK,
+    'Pool destroyed successfully.'
   );
-  Topos::real_query(<<<EOS
-INSERT INTO `OrphanValues`
-SELECT `TV`.`tokenId`
-FROM `TokenValues` AS `TV` NATURAL LEFT JOIN `Tokens` AS `T`
-WHERE `T`.`tokenId` IS NULL;
-EOS
-  );
-  Topos::real_query(<<<EOS
-DELETE `TokenValues`
-FROM `OrphanValues` NATURAL JOIN `TokenValues`;
-EOS
-  );
-  Topos::real_query(<<<EOS
-DROP TABLE `OrphanValues`;
-EOS
-  );
-  REST::header(array(
-    'Content-Type' => REST::best_xhtml_type() . '; charset=UTF-8'
-  ));
-  echo REST::html_start('Pool');
-  echo '<p>Pool destroyed successfully.</p>';
-  echo REST::html_end();
-  exit;
 }
 
 
@@ -74,20 +48,17 @@ list( $ntokens, $nlocks ) = Topos::query($query)->fetch_row();
 
 $form = <<<EOS
 <h2>Forms</h2>
-<h3>Delete</h3>
-<form action="./?http_method=DELETE" method="post">
-<input type="submit" value="Delete this pool"/>
-</form>
 <h3>Getting the next token</h3>
 <form action="nextToken" method="get">
-<input type="text" name="token"/> Token value RegExp<br/>
+<input type="text" name="name"/> Token name search string<br/>
 <input type="text" name="timeout"/> Timeout in seconds (leave empty for shared tokens)<br/>
 <input type="text" name="description"/> Lock description (leave empty for shared tokens)<br/>
 <input type="submit" value="Get next token"/>
 </form>
-<h3>Progress bar</h3>
+<h3>Progress bar (deprecated)</h3>
 <form action="progress" method="get">
 <input type="text" name="total"/> Total number of tokens<br/>
+<input type="text" name="width" value="300" /> Width<br/>
 <input type="submit" value="Show progress bar"/>
 </form>
 EOS;

@@ -22,15 +22,33 @@ require_once('include/global.php');
 $escPool = Topos::escape_string($TOPOS_POOL);
 $poolId = Topos::poolId($TOPOS_POOL);
 
+if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+//  Topos::real_query('START TRANSACTION;');
+  Topos::real_query(<<<EOS
+DELETE `Pools`, `Tokens`
+FROM `Pools` NATURAL LEFT JOIN `Tokens`
+WHERE `Pools`.`poolName` = {$escPool};
+EOS
+  );
+  REST::fatal(
+    REST::HTTP_OK,
+    'Pool destroyed successfully.'
+  );
+}
+
 // Handle the creation of a number of tokens, set by the user.
+$input = NULL;
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
      strpos( @$_SERVER['CONTENT_TYPE'], 'application/x-www-form-urlencoded' ) === 0 ) {
-  if ( !is_string(@$_POST['tokens']) )
-    REST::fatal(REST::HTTP_BAD_REQUEST, 'Missing required parameter "tokens"');
-  $tokens = preg_split('/[^\\d]+/', $_POST['tokens'], -1, PREG_SPLIT_NO_EMPTY);
-//  if (empty($tokens))
-//    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (1)');
-  if ( !empty($_POST['pool']) ) {
+  if ( isset( $_POST['pool'] ) ) {
+    if ( $_POST['pool'] === '' )
+      REST::fatal(
+        REST::HTTP_BAD_REQUEST,
+        'Empty parameter "pool"'
+      );
+    $tokens = isset( $_POST['tokens'] )
+      ? preg_split('/[^\\d]+/', $_POST['tokens'], -1, PREG_SPLIT_NO_EMPTY)
+      : array();
     $tgtPool = $poolId;
     $srcPool = Topos::poolId($_POST['pool']);
     $tokenIds = count($tokens)
@@ -47,26 +65,31 @@ EOS
       REST::HTTP_OK,
       Topos::mysqli()->affected_rows . ' tokens moved'
     );
-  } elseif ( count($tokens) == 1 ) {
-    $tokens = $tokens[0];
-    if ( !$tokens || $tokens > 1000000 )
-      REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (2)');
+  } elseif ( isset( $_POST['ntokens'] ) ) {
+    $offset = (int)(@$_POST['offset']);
+    $ntokens = (int)($_POST['ntokens']);
+    if ($ntokens <= 0 || $ntokens > 1000000)
+      REST::fatal(
+        REST::HTTP_BAD_REQUEST,
+        'Bad values for "ntokens" or "offset"'
+      );
     Topos::real_query(
-      "CALL `createTokens`({$escPool}, {$tokens});"
+      "CALL `createTokens`({$escPool}, {$ntokens}, {$offset});"
     );
     REST::fatal(REST::HTTP_ACCEPTED);
-  } else {
-    REST::fatal(REST::HTTP_BAD_REQUEST, 'Illegal value for parameter "tokens" (3)');
-  }
+  } elseif ( isset( $_POST['tokens'] ) ) {
+    $input = tmpfile();
+    fwrite( $input, $_POST['tokens'] );
+    fseek( $input, 0 );
+    $_SERVER['CONTENT_TYPE'] = 'text/plain; charset="UTF-8"';
+  } else REST::fatal( REST::HTTP_BAD_REQUEST );
 }
 
-// Handle a upload for files of which each line will be a token, and content-type multipart/form-data
-// TODO: Dit is gedaan door Evert. Ik ben er nog niet helemaal tevreden over
-// geloof ik. De code is bijna 100% redundant. Eigenlijk had ik de nieuwe 
-// functie liever geintegreerd gezien met de bestaande upload-faciliteit.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_GET['perline'] ) && strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) === 0) {
-  if (empty($_FILES))
-    REST::fatal(REST::HTTP_BAD_REQUEST, "Nothing to process");
+// Handle a upload of a single text file, of which each line will be a token.
+if ( $_SERVER['REQUEST_METHOD'] === 'POST' &&
+     strpos( @$_SERVER['CONTENT_TYPE'], 'text/' ) === 0 ) {
+  $esccontenttype = Topos::escape_string($_SERVER['CONTENT_TYPE']);
+  if (!$input) $input = REST::inputhandle();
   $stmt1 = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `TokenValues` (
   `tokenValue`
@@ -75,88 +98,34 @@ EOS
   );
   $stmt2 = Topos::mysqli()->prepare(<<<EOS
 INSERT INTO `Tokens` (
-  `tokenId`, `poolId`, `tokenName`, `tokenType`, `tokenLength`, `tokenCreated`
-) VALUES (?, {$poolId}, ?, ?, ?, UNIX_TIMESTAMP());
+  `tokenId`, `poolId`, `tokenType`, `tokenLength`, `tokenCreated`
+) VALUES (?, {$poolId}, {$esccontenttype}, ?, UNIX_TIMESTAMP());
 EOS
   );
-  $bindTokenValue = $bindTokenId = $bindTokenType = $bindTokenLength = $bindTokenName = null;
+  $bindTokenValue = $bindTokenId = $bindTokenLength = null;
   $stmt1->bind_param("s", $bindTokenValue);
-  $stmt2->bind_param("issi", $bindTokenId, $bindTokenName, $bindTokenType, $bindTokenLength);
-  $t_upload_map = array();
-  foreach ($_FILES as $paramname => $file) {
-    if (!is_array( $file['error'] ) ) {
-      $file['name'    ] = array( $file['name'    ] );
-      $file['error'   ] = array( $file['error'   ] );
-      $file['type'    ] = array( $file['type'    ] );
-      $file['tmp_name'] = array( $file['tmp_name'] );
-      $file['size'    ] = array( $file['size'    ] );
-    }
-    foreach ( $file['name'] as $key => $filename ) {
-      if ( $file['error'][$key] === UPLOAD_ERR_NO_FILE )
-        continue;
-      if ( $file['error'][$key] !== UPLOAD_ERR_OK )
-        REST::fatal(
-          REST::HTTP_BAD_REQUEST,
-          "Errno {$file['error'][$key]} occured during file upload."
-        );
-      $stream = fopen( $file['tmp_name'][$key], 'r' );
-      while (!feof($stream)) {
-        $bindTokenValue = fgets($stream);
-        if ( !$stmt1->execute() )
-          REST::fatal(
-            REST::HTTP_INTERNAL_SERVER_ERROR,
-            'stmt1: ' . $stmt1->error
-          );
-        $t_upload_map[$paramname][$key][] = array('id' => $stmt1->insert_id, 'size' => strlen($bindTokenValue));
-      }
-    }
+  $stmt2->bind_param("ii", $bindTokenId, $bindTokenLength);
+  ini_set('auto_detect_line_endings', 1);
+  while ( ( $line = fgets( $input ) ) ) {
+    $bindTokenValue = rtrim( $line, "\r\n" );
+    if ( !$stmt1->execute() )
+      REST::fatal(
+        REST::HTTP_INTERNAL_SERVER_ERROR,
+        'stmt1: ' . $stmt1->error
+      );
+    $bindTokenId = $stmt1->insert_id;
+    $bindTokenLength = strlen($bindTokenValue);
+    if ( !$stmt2->execute() )
+      REST::fatal(
+        REST::HTTP_INTERNAL_SERVER_ERROR,
+        'stmt2: ' . $stmt2->error
+      );
   }
-  // For this operation, we need MySQL transactions.
-  Topos::real_query('START TRANSACTION;');
-  try {
-    foreach ($_FILES as $paramname => $file) {
-      if (!is_array( $file['error'] ) ) {
-        $file['name'    ] = array( $file['name'    ] );
-        $file['error'   ] = array( $file['error'   ] );
-        $file['type'    ] = array( $file['type'    ] );
-        $file['tmp_name'] = array( $file['tmp_name'] );
-        $file['size'    ] = array( $file['size'    ] );
-      }
-      foreach ( $file['name'] as $key => $filename ) {
-        if ( !empty($t_upload_map[$paramname][$key]) ) {
-          $bindTokenName = empty($filename) ? '' : $filename;
-          $bindTokenType = empty($file['type'][$key])
-            ? 'application/octet-stream' : $file['type'][$key];
-          foreach ( $t_upload_map[$paramname][$key] as $tokenData) {
-            $bindTokenId = $tokenData['id'];
-            $bindTokenLength = $tokenData['size'];
-            if ( !$stmt2->execute() ) {
-              Topos::mysqli()->rollback();
-              REST::fatal(
-                REST::HTTP_INTERNAL_SERVER_ERROR,
-                'stmt2: ' . $stmt2->error
-              );
-            } // if ( !$stmt2->execute() )
-          }
-        }
-      } // foreach ( $file['name'] as $key => $filename )
-    } // foreach ($_FILES as $paramname => $file)
-  } // try
-  catch (Topos_MySQL $e) {
-    Topos::mysqli()->rollback();
-    throw $e;
-  }
-  if (!Topos::mysqli()->commit())
-    REST::fatal(
-      REST::HTTP_SERVICE_UNAVAILABLE,
-      'Transaction failed: ' . htmlentities(Topos::mysqli()->error)
-    );
-
   REST::fatal(REST::HTTP_ACCEPTED);
 }
 
 // Handle upload of multiple tokens in a multipart/form-data request body:
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ( $_SERVER['REQUEST_METHOD'] === 'POST' ) {
   // Check if we have the right mime type:
   if ( strpos( @$_SERVER['CONTENT_TYPE'], 'multipart/form-data' ) !== 0 )
     REST::fatal(REST::HTTP_UNSUPPORTED_MEDIA_TYPE);
@@ -263,28 +232,29 @@ $result = Topos::query($query);
 
 $form = <<<EOS
 <h2>Forms</h2>
-<h3>Populate this pool</h3>
+<h3>Populate this pool with numbers</h3>
 <form action="./" method="post">
-# tokens: <input type="text" name="tokens"/>
+<input type="text" name="ntokens"/> #tokens<br/>
+<input type="text" name="offset"/> offset<br/>
 <input type="submit" value="Populate"/>
 </form>
-<h3>Move tokens to this pool</h3>
+<h3>Move tokens into this pool</h3>
 <form action="./" method="post">
-<p>Source pool:<input type="text" name="pool"/><br/>
-Token IDs: <input type="text" name="tokens"/> (IDs separated by anything)<br/>
-<input type="submit" value="Move"/></p>
+<input type="text" name="pool"/> Source pool name<br/>
+<input type="text" name="tokens"/> Token IDs (separated by anything)<br/>
+<input type="submit" value="Move"/>
 </form>
-<h3>Create tokens</h3>
+<h3>Create tokens from a parameter list</h3>
+<form action="./" method="post">
+<textarea name="tokens"></textarea><br/>
+<input type="submit" value="Create"/>
+</form>
+<h3>Create tokens from files</h3>
 <form action="./" method="post" enctype="multipart/form-data">
 <input type="file" name="create[]" /> File 1<br />
 <input type="file" name="create[]" /> File 2<br />
 <input type="file" name="create[]" /> File <i>n</i><br />
 <input type="submit" value="Post file(s)" />
-</form>
-<h3>Create tokens from each line in a file</h3>
-<form action="./?perline" method="post" enctype="multipart/form-data">
-<input type="file" name="create" /> File<br />
-<input type="submit" value="Post file" />
 </form>
 EOS;
 $directory = RESTDir::factory('Tokens')->setForm($form);
