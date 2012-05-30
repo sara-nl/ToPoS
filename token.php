@@ -45,13 +45,13 @@ if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
 $poolId = Topos::poolId($TOPOS_POOL);
 $result = Topos::query(<<<EOS
 SELECT `tokenLength`, `tokenType`, `tokenCreated`, `tokenName`,
-       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(), `tokenLockUUID`, NULL)
+       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(), `tokenLockUUID`, NULL), `tokenLeases`
 FROM `Tokens`
 WHERE `tokenId` = {$TOPOS_TOKEN}
   AND `poolId`  = {$poolId};
 EOS
 );
-if (!($row = $result->fetch_row()))
+if (!($row = $result->fetch_array()))
   REST::fatal(REST::HTTP_NOT_FOUND);
 $result = Topos::query(<<<EOS
 SELECT `tokenValue` FROM `TokenValues`
@@ -62,17 +62,18 @@ $tokenValue = $result->fetch_row();
 $tokenValue = $tokenValue[0];
 
 $headers = array(
-  'Content-Type' => $row[1],
-  'Content-Length' => $row[0],
-  'Last-Modified' => REST::http_date($row[2]),
+  'Content-Type' => $row['tokenType'],
+  'Content-Length' => $row['tokenLength'],
+  'Last-Modified' => REST::http_date($row['tokenCreated']),
+  'X-Number-Of-Leases' => $row['tokenLeases'],
 );
-if (!empty($row[3]))
-  $headers['Content-Disposition'] = 'inline; filename="' . $row[3] . '"';
+if (!empty($row['tokenName']))
+  $headers['Content-Disposition'] = 'inline; filename="' . $row['tokenName'] . '"';
   
-if ($row[4]) {
-  $headers['X-Topos-OpaqueLockToken'] = "opaquelocktoken:{$row[4]}";
+if (array_key_exists('tokenLockUUID', $row)) {
+  $headers['X-Topos-OpaqueLockToken'] = "opaquelocktoken:{$row['tokenLockUUID']}";
   $headers['X-Topos-LockURL'] = Topos::urlbase() . 'pools/' . REST::urlencode($TOPOS_POOL) .
-    '/locks/' . $row[4];
+    '/locks/' . $row['tokenLockUUID'];
 }
 REST::header($headers);
 if ($_SERVER['REQUEST_METHOD'] === 'HEAD') exit;
