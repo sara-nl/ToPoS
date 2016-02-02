@@ -45,7 +45,7 @@ if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
 $poolId = Topos::poolId($TOPOS_POOL);
 $result = Topos::query(<<<EOS
 SELECT `tokenLength`, `tokenType`, `tokenCreated`, `tokenName`,
-       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(), `tokenLockUUID`, NULL), `tokenLeases`
+       IF(`tokenLockTimeout` > UNIX_TIMESTAMP(), `tokenLockUUID`, NULL) AS 'tokenLockUUID', `tokenLeases`
 FROM `Tokens`
 WHERE `tokenId` = {$TOPOS_TOKEN}
   AND `poolId`  = {$poolId};
